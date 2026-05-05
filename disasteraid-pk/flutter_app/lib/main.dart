@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'core/api/api_client.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'core/auth/auth_provider.dart';
-import 'core/api/api_client.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/register_screen.dart';
 import 'features/ngo/ngo_onboard_screen.dart';
-import 'features/admin/admin_ngos_screen.dart';
+import 'features/admin/admin_dashboard.dart';
 import 'features/campaigns/screens/campaign_list_screen.dart';
 import 'features/campaigns/screens/campaign_create_screen.dart';
 
@@ -32,7 +32,6 @@ class MyApp extends StatelessWidget {
               '/login': (_) => const LoginScreen(),
               '/register': (_) => const RegisterScreen(),
               '/ngo/onboard': (_) => const NgoOnboardScreen(),
-              '/admin/ngos': (_) => const AdminNgosScreen(),
               '/campaign/create': (_) => const CampaignCreateScreen(),
             },
           );
@@ -82,7 +81,7 @@ class _AppShellState extends State<AppShell> {
 
     if (_loadingStatus) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    if (role == 'admin') return const AdminNgosScreen();
+    if (role == 'admin') return const AdminDashboard();
     if (role == 'ngo') {
       if (_ngoStatus == 'APPROVED') return const NgoDashboard();
       return NgoStatusScreen(status: _ngoStatus, onRefresh: _fetchNgoStatus);

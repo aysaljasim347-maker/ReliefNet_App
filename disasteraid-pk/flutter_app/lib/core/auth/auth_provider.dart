@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api/api_client.dart';
+import 'package:dio/dio.dart';
 
 class AuthProvider extends ChangeNotifier {
   final _storage = const FlutterSecureStorage();
@@ -15,7 +16,16 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> checkAuth() async {
     _token = await _storage.read(key: 'token');
-    _isAuthenticated = _token!= null;
+    if (_token!= null) {
+      try {
+        final res = await _api.dio.get('/auth/me');
+        _user = res.data['data'];
+        _isAuthenticated = true;
+      } catch (e) {
+        await _storage.delete(key: 'token');
+        _isAuthenticated = false;
+      }
+    }
     notifyListeners();
   }
 
@@ -26,23 +36,44 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     required String role,
   }) async {
-    final res = await _api.dio.post('/auth/register', data: {
-      'name': name, 'email': email, 'phone': phone, 'password': password, 'role': role,
-    });
-    _token = res.data['data']['token'];
-    _user = res.data['data']['user'];
-    _isAuthenticated = true;
-    await _storage.write(key: 'token', value: _token);
-    notifyListeners();
+    try {
+      final res = await _api.dio.post('/auth/register', data: {
+        'name': name,
+        'email': email?.isEmpty == true? null : email,
+        'phone': phone?.isEmpty == true? null : phone,
+        'password': password,
+        'role': role,
+      });
+      print('REGISTER RESPONSE: ${res.data}');
+
+      _token = res.data['data']['token'];
+      _user = res.data['data']['user'];
+      _isAuthenticated = true;
+      await _storage.write(key: 'token', value: _token);
+      notifyListeners();
+    } on DioException catch (e) {
+      print('REGISTER ERROR: ${e.response?.data}');
+      if (e.response?.statusCode == 409 || e.response?.data['error']?.contains('exists')) {
+        throw 'Email or phone already exists';
+      }
+      throw 'Registration failed: ${e.message}';
+    } catch (e) {
+      print('REGISTER UNKNOWN ERROR: $e');
+      throw 'Registration failed';
+    }
   }
 
   Future<void> login(String emailOrPhone, String password) async {
-    final res = await _api.dio.post('/auth/login', data: {'email': emailOrPhone, 'password': password});
-    _token = res.data['data']['token'];
-    _user = res.data['data']['user'];
-    _isAuthenticated = true;
-    await _storage.write(key: 'token', value: _token);
-    notifyListeners();
+    try {
+      final res = await _api.dio.post('/auth/login', data: {'email': emailOrPhone, 'password': password});
+      _token = res.data['data']['token'];
+      _user = res.data['data']['user'];
+      _isAuthenticated = true;
+      await _storage.write(key: 'token', value: _token);
+      notifyListeners();
+    } on DioException catch (e) {
+      throw 'Invalid credentials';
+    }
   }
 
   Future<void> logout() async {

@@ -22,8 +22,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final Map<String, Map<String, dynamic>> _roles = {
     'donor': {'label': 'Donor', 'icon': Icons.favorite, 'desc': 'Support campaigns with PKR'},
     'ngo': {'label': 'NGO', 'icon': Icons.corporate_fare, 'desc': 'Run campaigns & manage aid'},
-    'volunteer': {'label': 'Volunteer', 'icon': Icons.handshake, 'desc': 'Deliver aid on ground'},
-    'beneficiary': {'label': 'Beneficiary', 'icon': Icons.people, 'desc': 'Request aid for your family'},
   };
 
   Future<void> _register() async {
@@ -36,16 +34,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       await context.read<AuthProvider>().register(
         name: _nameController.text.trim(),
-        email: _emailController.text.isEmpty? null : _emailController.text.trim(),
-        phone: _phoneController.text.isEmpty? null : _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
         password: _passwordController.text,
         role: _role,
       );
-      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      setState(() => _error = e.toString().contains('409')? 'Email or phone already exists' : 'Registration failed');
+      setState(() => _error = e.toString());
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -64,15 +62,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 24),
             TextFormField(controller: _nameController, decoration: InputDecoration(labelText: 'Full Name', prefixIcon: const Icon(Icons.person_outline), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), validator: (v) => v!.length < 2? 'Enter your name' : null),
             const SizedBox(height: 16),
-            TextFormField(controller: _emailController, decoration: InputDecoration(labelText: 'Email (Optional)', prefixIcon: const Icon(Icons.email_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), keyboardType: TextInputType.emailAddress),
+            TextFormField(controller: _emailController, decoration: InputDecoration(labelText: 'Email', prefixIcon: const Icon(Icons.email_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 16),
-            TextFormField(controller: _phoneController, decoration: InputDecoration(labelText: 'Phone (Optional)', prefixIcon: const Icon(Icons.phone_outlined), hintText: '03XXXXXXXXX', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), keyboardType: TextInputType.phone),
+            TextFormField(controller: _phoneController, decoration: InputDecoration(labelText: 'Phone', prefixIcon: const Icon(Icons.phone_outlined), hintText: '03XXXXXXXXX', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), keyboardType: TextInputType.phone),
             const SizedBox(height: 16),
             TextFormField(controller: _passwordController, decoration: InputDecoration(labelText: 'Password', prefixIcon: const Icon(Icons.lock_outline), suffixIcon: IconButton(icon: Icon(_obscure? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscure =!_obscure)), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), obscureText: _obscure, validator: (v) => v!.length < 6? 'Min 6 characters' : null),
             const SizedBox(height: 24),
             Text('I am a', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-         ..._roles.entries.map((entry) => Card(
+        ..._roles.entries.map((entry) => Card(
               margin: const EdgeInsets.only(bottom: 8),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: _role == entry.key? Theme.of(context).colorScheme.primary : Colors.grey[300]!, width: _role == entry.key? 2 : 1)),
               child: RadioListTile<String>(
