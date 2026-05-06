@@ -36,23 +36,29 @@ router.post('/', auth('ngo'), upload.single('image'), async (req, res, next) => 
   } catch (e) { next(e); }
 });
 
-// GET /api/campaigns - Public list with donor count
+// GET /api/campaigns
 router.get('/', async (req, res, next) => {
   try {
-    const { status = 'ACTIVE', category, limit = 20, offset = 0 } = req.query;
+    const { ngo_id, status, category } = req.query;
     let query = `
-      SELECT c.*, n.org_name, n.id as ngo_id,
-             COUNT(DISTINCT d.user_id) as donor_count
+      SELECT
+        c.*,
+        n.org_name,
+        u.email as ngo_email,
+        COUNT(d.id) as donor_count
       FROM campaigns c
       JOIN ngo_profiles n ON c.ngo_id = n.id
-      LEFT JOIN donations d ON d.campaign_id = c.id
+      JOIN users u ON n.user_id = u.id
+      LEFT JOIN donations d ON d.campaign_id = c.id AND d.status = 'completed'
       WHERE 1=1
     `;
     const params = [];
+
+    if (ngo_id) { params.push(ngo_id); query += ` AND c.ngo_id = $${params.length}`; }
     if (status) { params.push(status); query += ` AND c.status = $${params.length}`; }
     if (category) { params.push(category); query += ` AND c.category = $${params.length}`; }
-    query += ` GROUP BY c.id, n.id ORDER BY c.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
+
+    query += ' GROUP BY c.id, n.id, u.id ORDER BY c.created_at DESC';
 
     const result = await db.query(query, params);
     res.json({ data: result.rows });
@@ -77,17 +83,26 @@ router.get('/my', auth('ngo'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/campaigns/:id - Single campaign with full stats
+// GET /api/campaigns/:id
 router.get('/:id', async (req, res, next) => {
   try {
     const result = await db.query(`
-      SELECT c.*, n.org_name, n.contact_person, n.email, n.phone,
-             COUNT(DISTINCT d.user_id) as donor_count
+      SELECT
+        c.*,
+        n.org_name,
+        n.contact_person,
+        n.address as ngo_address,
+        n.mission,
+        u.email as ngo_email,
+        u.phone as ngo_phone,
+        u.name as ngo_contact_name,
+        COUNT(d.id) as donor_count
       FROM campaigns c
       JOIN ngo_profiles n ON c.ngo_id = n.id
-      LEFT JOIN donations d ON d.campaign_id = c.id
+      JOIN users u ON n.user_id = u.id
+      LEFT JOIN donations d ON d.campaign_id = c.id AND d.status = 'completed'
       WHERE c.id = $1
-      GROUP BY c.id, n.id
+      GROUP BY c.id, n.id, u.id
     `, [req.params.id]);
 
     if (!result.rows[0]) return res.status(404).json({ error: 'Campaign not found' });
