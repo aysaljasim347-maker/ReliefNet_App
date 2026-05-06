@@ -76,4 +76,4 @@
 **Root Cause:** Backend Joi expects uppercase JAZZCASH but Flutter dropdown used lowercase values
 **Fix:** Changed Flutter dropdown values to uppercase MOCK, JAZZCASH, EASYPAISA, STRIPE. Set default to MOCK
 **File:** campaign_detail_screen.dart
-**Commit:** [add hash after commit] d2d3751
+**Commit:** [add hash after commit] f4096e9
