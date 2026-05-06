@@ -215,7 +215,7 @@ class _DonateSheetState extends State<DonateSheet> {
   final _amountController = TextEditingController();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  String _paymentMethod = 'jazzcash';
+  String _paymentMethod = 'MOCK';
   bool _loading = false;
   final _api = ApiClient();
 
@@ -307,7 +307,7 @@ class _DonateSheetState extends State<DonateSheet> {
               validator: (v) {
                 if (v!.isEmpty) return 'Required';
                 final amt = int.tryParse(v);
-                if (amt == null || amt < 10) return 'Min PKR 10';
+                if (amt == null || amt < 100) return 'Min PKR 100';
                 return null;
               },
             ),

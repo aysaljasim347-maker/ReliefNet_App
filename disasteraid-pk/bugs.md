@@ -58,4 +58,22 @@
 **Root Cause:** SELECT c.* pulled non-serializable column causing JSON.stringify to recurse infinitely
 **Fix:** Replaced c.* with explicit column list. Removed spread operator on db row in donation response
 **Files:** backend/src/modules/campaigns/routes.js, backend/src/modules/donations/routes.js
-**Commit:** [add hash after commit]  
+**Commit:** [add hash after commit]  d2d3751
+
+
+## #8 - Infinite recursion in db.js causing Maximum call stack size exceeded
+**Status:** Fixed
+**Error:** RangeError: Maximum call stack size exceeded at db.js:11
+**Root Cause:** module.exports = pool; then module.exports.query = ... overwrote pool and created recursive function
+**Fix:** Export pool directly. Removed custom .query wrapper since pg Pool already provides it
+**File:** backend/src/config/db.js
+**Commit:** [add hash after commit] d2d3751
+
+
+## #9 - Flutter Dropdown assertion failed on payment method
+**Status:** Fixed
+**Error:** Failed assertion: There should be exactly one item with value: jazzcash
+**Root Cause:** Backend Joi expects uppercase JAZZCASH but Flutter dropdown used lowercase values
+**Fix:** Changed Flutter dropdown values to uppercase MOCK, JAZZCASH, EASYPAISA, STRIPE. Set default to MOCK
+**File:** campaign_detail_screen.dart
+**Commit:** [add hash after commit] d2d3751
