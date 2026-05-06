@@ -4,13 +4,16 @@ const db = require('../../config/db'); // db is now the pool
 const auth = require('../../middleware/auth');
 const Joi = require('joi');
 
+
 const donationSchema = Joi.object({
   campaign_id: Joi.number().required(),
   amount: Joi.number().min(100).required(),
-  donor_name: Joi.string().required(),
-  donor_email: Joi.string().email().allow(null, ''),
   payment_method: Joi.string().uppercase().valid('MOCK', 'STRIPE', 'JAZZCASH', 'EASYPAISA').required(),
-  transaction_id: Joi.string().required()
+  transaction_id: Joi.string().required(),
+  // Optional - only used if user wants to donate anonymously or as guest
+  donor_name: Joi.string().allow('', null),
+  donor_email: Joi.string().email().allow('', null),
+  is_anonymous: Joi.boolean().default(false)
 });
 
 // POST /api/donations - Create donation + update wallet
@@ -23,6 +26,15 @@ router.post('/', auth(), async (req, res, next) => { // Changed from auth('donor
 
   try {
     await client.query('BEGIN');
+
+        // Get logged-in user info
+    const userRes = await client.query('SELECT name, email FROM users WHERE id = $1', [req.user.id]);
+    const user = userRes.rows[0];
+
+    // Use provided name/email if anonymous, else use logged-in user's data
+    const finalDonorName = is_anonymous && donor_name? donor_name : user.name;
+    const finalDonorEmail = is_anonymous && donor_email? donor_email : user.email;
+
 
     // 1. Get campaign + NGO + check status
     const campaign = await client.query(`
@@ -40,11 +52,11 @@ router.post('/', auth(), async (req, res, next) => { // Changed from auth('donor
       throw new Error('Campaign has ended');
     }
 
-    // 2. Create donation record
-    const donation = await client.query(
-      `INSERT INTO donations (user_id, campaign_id, amount, payment_method, status, transaction_ref, donor_name, donor_email)
-       VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7) RETURNING *`,
-      [req.user.id, campaign_id, amount, payment_method, transaction_id, donor_name, donor_email]
+
+        const donation = await client.query(
+      `INSERT INTO donations (user_id, campaign_id, amount, payment_method, status, transaction_ref, donor_name, donor_email, is_anonymous)
+       VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8) RETURNING *`,
+      [req.user.id, campaign_id, amount, payment_method, transaction_id, finalDonorName, finalDonorEmail, is_anonymous]
     );
 
     // 3. Update campaign raised_amount + check if target hit

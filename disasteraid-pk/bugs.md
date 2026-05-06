@@ -31,4 +31,12 @@
 **Root Cause:** config/db.js exports pool directly as 'db', not as db.pool
 **Fix:** Changed db.pool.connect() to db.connect() in donations/routes.js
 **File:** backend/src/modules/donations/routes.js:22
-**Commit:** [add hash after commit]
+**Commit:** [add hash after commit]  529d5eb
+
+
+## #5 - Donations table missing donor_name column
+**Status:** Fixed
+**Error:** 400 Bad Request - column "donor_name" of relation "donations" does not exist
+**Root Cause:** donations table schema missing donor_name, donor_email, transaction_ref columns
+**Fix:** ALTER TABLE donations ADD COLUMN donor_name VARCHAR(255), donor_email VARCHAR(255), transaction_ref VARCHAR(255)
+**File:** Database migration
