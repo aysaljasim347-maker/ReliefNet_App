@@ -39,8 +39,8 @@
 **Error:** 400 Bad Request - column "donor_name" of relation "donations" does not exist
 **Root Cause:** donations table schema missing donor_name, donor_email, transaction_ref columns
 **Fix:** ALTER TABLE donations ADD COLUMN donor_name VARCHAR(255), donor_email VARCHAR(255), transaction_ref VARCHAR(255)
-**File:** Database migration   0c9e800
-
+**File:** Database migration   
+**Commit:** [add hash after commit]   0c9e800
 
 ## #6 - is_anonymous column mismatch + payment_method case
 **Status:** Fixed
@@ -48,3 +48,14 @@
 **Root Cause:** Backend schema missing is_anonymous field, Flutter sending lowercase payment_method
 **Fix:** Added is_anonymous to Joi schema and INSERT. Changed Flutter to send uppercase payment methods
 **Files:** backend/src/modules/donations/routes.js, campaign_detail_screen.dart
+**Commit:** [add hash after commit]  98dd76d
+
+
+
+## #7 - Maximum call stack size exceeded on campaign detail
+**Status:** Fixed
+**Error:** 500 Internal Server Error - Maximum call stack size exceeded
+**Root Cause:** SELECT c.* pulled non-serializable column causing JSON.stringify to recurse infinitely
+**Fix:** Replaced c.* with explicit column list. Removed spread operator on db row in donation response
+**Files:** backend/src/modules/campaigns/routes.js, backend/src/modules/donations/routes.js
+**Commit:** [add hash after commit]  

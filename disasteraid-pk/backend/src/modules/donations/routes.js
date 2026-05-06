@@ -87,18 +87,40 @@ router.post('/', auth(), async (req, res, next) => { // Changed from auth('donor
     );
 
     await client.query('COMMIT');
-    res.json({
-      success: true,
-      data: {
-      ...donation.rows[0],
-        campaign: {
-          title: updatedCampaign.rows[0].title,
-          raised_amount: updatedCampaign.rows[0].raised_amount,
-          target_amount: updatedCampaign.rows[0].target_amount,
-          status: updatedCampaign.rows[0].status
-        }
-      }
-    });
+// Don't spread the whole row - pick fields
+console.log('Donation row:', JSON.stringify(donation.rows[0]));
+res.json({
+  success: true,
+  data: {
+    id: donation.rows[0].id,
+    campaign_id: donation.rows[0].campaign_id,
+    amount: donation.rows[0].amount,
+    payment_method: donation.rows[0].payment_method,
+    status: donation.rows[0].status,
+    created_at: donation.rows[0].created_at,
+    donor_name: donation.rows[0].donor_name,
+    donor_email: donation.rows[0].donor_email,
+    campaign: {
+      title: updatedCampaign.rows[0].title,
+      raised_amount: updatedCampaign.rows[0].raised_amount,
+      target_amount: updatedCampaign.rows[0].target_amount,
+      status: updatedCampaign.rows[0].status
+    }
+  }
+});
+
+    // res.json({
+    //   success: true,
+    //   data: {
+    //   ...donation.rows[0],
+    //     campaign: {
+    //       title: updatedCampaign.rows[0].title,
+    //       raised_amount: updatedCampaign.rows[0].raised_amount,
+    //       target_amount: updatedCampaign.rows[0].target_amount,
+    //       status: updatedCampaign.rows[0].status
+    //     }
+    //   }
+    // });
   } catch (e) {
     await client.query('ROLLBACK');
     res.status(400).json({ error: e.message });

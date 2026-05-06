@@ -88,7 +88,18 @@ router.get('/:id', async (req, res, next) => {
   try {
     const result = await db.query(`
       SELECT
-        c.*,
+        c.id,
+        c.ngo_id,
+        c.title,
+        c.description,
+        c.category,
+        c.target_amount,
+        c.raised_amount,
+        c.image_url,
+        c.location,
+        c.status,
+        c.created_at,
+        c.end_date,
         n.org_name,
         n.contact_person,
         n.address as ngo_address,
@@ -109,6 +120,7 @@ router.get('/:id', async (req, res, next) => {
     res.json({ data: result.rows[0] });
   } catch (e) { next(e); }
 });
+
 
 // PUT /api/campaigns/:id - NGO edits own campaign
 router.put('/:id', auth('ngo'), upload.single('image'), async (req, res, next) => {
