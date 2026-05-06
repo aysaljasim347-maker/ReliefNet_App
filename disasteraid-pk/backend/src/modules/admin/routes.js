@@ -52,6 +52,34 @@ router.get('/stats', auth('admin'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// PATCH /api/admin/ngos/:id/approve - Partial update to status
+router.patch('/ngos/:id/approve', auth('admin'), async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `UPDATE ngo_profiles SET status='APPROVED', approved_by=$1, approved_at=NOW() WHERE id=$2 AND status='PENDING' RETURNING *`,
+      [req.user.id, req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'NGO not found or not pending' });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (e) { next(e); }
+});
+
+// PATCH /api/admin/ngos/:id/reject - Partial update to status + reason
+router.patch('/ngos/:id/reject', auth('admin'), async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || reason.trim() === '') {
+      return res.status(400).json({ error: 'Rejection reason required' });
+    }
+    const result = await db.query(
+      `UPDATE ngo_profiles SET status='REJECTED', rejection_reason=$1 WHERE id=$2 AND status='PENDING' RETURNING *`,
+      [reason.trim(), req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'NGO not found or not pending' });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (e) { next(e); }
+});
+
 // GET /api/admin/ngos - list NGOs with optional status filter
 router.get('/ngos', auth('admin'), async (req, res, next) => {
   try {
@@ -112,30 +140,6 @@ router.get('/ngos/all', auth('admin'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/admin/ngos/:id/approve
-router.post('/ngos/:id/approve', auth('admin'), async (req, res, next) => {
-  try {
-    const result = await db.query(
-      `UPDATE ngo_profiles SET status='APPROVED', approved_by=$1, approved_at=NOW() WHERE id=$2 RETURNING *`,
-      [req.user.id, req.params.id]
-    );
-    if (!result.rows[0]) return res.status(404).json({ error: 'NGO not found' });
-    res.json({ success: true, data: result.rows[0] });
-  } catch (e) { next(e); }
-});
-
-// POST /api/admin/ngos/:id/reject
-router.post('/ngos/:id/reject', auth('admin'), async (req, res, next) => {
-  try {
-    const { reason } = req.body;
-    const result = await db.query(
-      `UPDATE ngo_profiles SET status='REJECTED', rejection_reason=$1 WHERE id=$2 RETURNING *`,
-      [reason || 'Not specified', req.params.id]
-    );
-    if (!result.rows[0]) return res.status(404).json({ error: 'NGO not found' });
-    res.json({ success: true, data: result.rows[0] });
-  } catch (e) { next(e); }
-});
 
 // GET /api/admin/campaigns - All campaigns with filters
 router.get('/campaigns', auth('admin'), async (req, res, next) => {

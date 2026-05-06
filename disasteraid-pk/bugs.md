@@ -116,3 +116,24 @@
 **Fix:** Added GET /api/admin/ngos route with optional status query param. Supports PENDING, APPROVED, REJECTED filters.
 **Files:** backend/src/modules/admin/routes.js:46-70
 **Test Result:** NGOs tab loads 2 pending NGOs. Filter works for all statuses.
+**Commit:** [add hash after commit] 00c4164
+
+
+## #12 - Admin NGO approve/reject 404
+**Status:** Fixed
+**Date:** 2026-05-06
+**Error:** POST /api/admin/ngos/3/reject 404 Route not found
+**Root Cause:** Express route order. Generic `/ngos` route defined before `/ngos/:id/reject`, causing Express to match `/ngos` first and treat `3/reject` as params.
+**Fix:** Moved `/ngos/:id/approve` and `/ngos/:id/reject` routes before `/ngos` route in admin/routes.js
+**Files:** backend/src/modules/admin/routes.js
+**Rule:** Define specific routes before generic ones in Express
+**Test:** Approve/reject NGO returns 200 with updated status
+
+
+## #13 - Admin NGO approve/reject HTTP method
+**Status:** Fixed
+**Decision:** Standardized on PATCH for status updates
+**Root Cause:** Backend used POST, Flutter used PATCH
+**Fix:** Changed backend routes from `router.post` to `router.patch` for /ngos/:id/approve and /ngos/:id/reject
+**Files:** backend/src/modules/admin/routes.js
+**Note:** PATCH is REST-appropriate for partial resource updates
