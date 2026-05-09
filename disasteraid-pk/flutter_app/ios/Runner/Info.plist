@@ -27,6 +27,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
+	<!-- Add here for the lcoation permission -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+<string>We need your location to show nearby aid campaigns</string>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>

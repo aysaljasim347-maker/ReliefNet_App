@@ -21,9 +21,11 @@ class AuthProvider extends ChangeNotifier {
       try {
         final res = await _api.dio.get('/auth/me');
         _user = res.data['data'];
+        _api.setCurrentUser(_user!); // ADD THIS
         _isAuthenticated = true;
       } catch (e) {
         await _storage.delete(key: 'token');
+        _api.clearCurrentUser(); // ADD THIS
         _isAuthenticated = false;
       }
     }
@@ -50,6 +52,7 @@ class AuthProvider extends ChangeNotifier {
       _token = res.data['data']['token'];
       _user = res.data['data']['user'];
       _isAuthenticated = true;
+      _api.setCurrentUser(_user!); // ADD THIS
       await _storage.write(key: 'token', value: _token);
       notifyListeners();
     } on DioException catch (e) {
@@ -70,8 +73,10 @@ class AuthProvider extends ChangeNotifier {
       _token = res.data['data']['token'];
       _user = res.data['data']['user'];
       _isAuthenticated = true;
+      _api.setCurrentUser(_user!); // ADD THIS
       await _storage.write(key: 'token', value: _token);
       notifyListeners();
+      
     } on DioException catch (e) {
       throw 'Invalid credentials';
     }
@@ -80,6 +85,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     SocketService().disconnect();
     await _storage.delete(key: 'token');
+    _api.clearCurrentUser(); // ADD THIS
     _isAuthenticated = false;
     _user = null;
     _token = null;

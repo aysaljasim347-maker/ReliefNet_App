@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 
 // Init Socket.io
 socket.init(server);
-
+app.set('io' , socket.getIO());
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -39,6 +39,7 @@ app.get('/api/health', (req, res) => res.json({
 }));
 
 // Routes
+app.use('/api/chat', require('./modules/chat/routes'));
 app.use('/api/auth', require('./modules/auth/routes'));
 app.use('/api/ngos', require('./modules/ngos/routes'));
 app.use('/api/ngos', require('./modules/ngos/withdrawal_routes'));

@@ -3,6 +3,8 @@ import 'package:disasteraid_pk/features/campaigns/services/campaign_service.dart
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:latlong2/latlong.dart';
+import '../../../core/widgets/location_picker.dart';
 
 class CampaignCreateScreen extends StatefulWidget {
   const CampaignCreateScreen({super.key});
@@ -15,19 +17,21 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
   final _title = TextEditingController();
   final _desc = TextEditingController();
   final _target = TextEditingController();
-  final _location = TextEditingController();
-  String _category = 'FOOD'; // Fixed: uppercase to match items
+  String _category = 'FOOD';
   File? _imageFile;
   DateTime? _endDate;
   bool _loading = false;
   final _picker = ImagePicker();
+
+  // ADDED: Location fields
+  LatLng? _campaignLocation;
+  String _campaignAddress = '';
 
   @override
   void dispose() {
     _title.dispose();
     _desc.dispose();
     _target.dispose();
-    _location.dispose();
     super.dispose();
   }
 
@@ -52,6 +56,10 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select campaign end date')));
       return;
     }
+    if (_campaignLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select campaign location')));
+      return;
+    }
     setState(() => _loading = true);
 
     try {
@@ -60,8 +68,11 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
         'description': _desc.text.trim(),
         'category': _category,
         'target_amount': _target.text.trim(),
-        'location': _location.text.trim(),
+        'location': _campaignAddress, // Changed: use address from picker
         'end_date': _endDate!.toIso8601String(),
+        'latitude': _campaignLocation!.latitude, // ADDED
+        'longitude': _campaignLocation!.longitude, // ADDED
+        'address': _campaignAddress.isEmpty? null : _campaignAddress, // ADDED
         if (_imageFile!= null)
           'image': await MultipartFile.fromFile(
             _imageFile!.path,
@@ -106,18 +117,18 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
                   border: Border.all(color: Colors.grey[400]!),
                 ),
                 child: _imageFile == null
-              ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_photo_alternate, size: 50, color: Colors.grey[600]),
-                        const SizedBox(height: 8),
-                        Text('Tap to add campaign image', style: TextStyle(color: Colors.grey[600])),
-                      ],
-                    )
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.file(_imageFile!, fit: BoxFit.cover, width: double.infinity),
-                    ),
+                   ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_photo_alternate, size: 50, color: Colors.grey[600]),
+                          const SizedBox(height: 8),
+                          Text('Tap to add campaign image', style: TextStyle(color: Colors.grey[600])),
+                        ],
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(_imageFile!, fit: BoxFit.cover, width: double.infinity),
+                      ),
               ),
             ),
             const SizedBox(height: 16),
@@ -143,8 +154,8 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
             DropdownButtonFormField(
               value: _category,
               items: ['FOOD', 'MEDICAL', 'SHELTER', 'EDUCATION', 'CLOTHING', 'OTHER']
-            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-               .toList(),
+                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                 .toList(),
               onChanged: (v) => setState(() => _category = v!),
               decoration: InputDecoration(
                 labelText: 'Category',
@@ -166,14 +177,18 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
                 return null;
               },
             ),
+            // REMOVED: Old TextFormField for location
+            // ADDED: LocationPicker widget
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _location,
-              decoration: InputDecoration(
-                labelText: 'Location (City/Area)',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              validator: (v) => v!.trim().length < 3? 'Min 3 characters' : null,
+            Text('Campaign Location', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            LocationPicker(
+              onLocationPicked: (latLng, address) {
+                setState(() {
+                  _campaignLocation = latLng;
+                  _campaignAddress = address;
+                });
+              },
             ),
             const SizedBox(height: 16),
             ListTile(
@@ -190,8 +205,8 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
               onPressed: _loading? null : _submit,
               style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
               child: _loading
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Create Campaign', style: TextStyle(fontSize: 16)),
+                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Create Campaign', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),

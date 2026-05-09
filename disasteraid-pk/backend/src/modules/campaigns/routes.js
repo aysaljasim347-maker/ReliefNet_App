@@ -4,35 +4,48 @@ const db = require('../../config/db');
 const auth = require('../../middleware/auth');
 const upload = require('../../utils/upload');
 const Joi = require('joi');
-
 const campaignSchema = Joi.object({
-  title: Joi.string().min(5).max(255).required(),
-  description: Joi.string().min(20).required(),
+  title: Joi.string().min(5).max(200).required(),
+  description: Joi.string().min(20).max(5000).required(),
   category: Joi.string().valid('FOOD', 'MEDICAL', 'SHELTER', 'EDUCATION', 'CLOTHING', 'OTHER').required(),
-  target_amount: Joi.number().positive().min(1000).required(),
-  location: Joi.string().min(3).required(),
-  end_date: Joi.date().greater('now').optional().allow(null, ''), // Changed to optional
+  target_amount: Joi.number().integer().min(1000).max(10000000).required(),
+  location: Joi.string().min(3).max(200).required(),
+  end_date: Joi.date().min('now').required(),
+  latitude: Joi.number().min(-90).max(90).allow(null), // ADD THIS
+  longitude: Joi.number().min(-180).max(180).allow(null), // ADD THIS
+  address: Joi.string().max(500).allow(null, '') // ADD THIS
 });
 
-// POST /api/campaigns - NGO creates campaign with Cloudinary image
+// POST /api/campaigns - Create campaign
 router.post('/', auth('ngo'), upload.single('image'), async (req, res, next) => {
   try {
     const { error, value } = campaignSchema.validate(req.body);
     if (error) return res.status(400).json({ error: error.details[0].message });
 
-    const ngo = await db.query('SELECT id, status FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
-    if (!ngo.rows[0]) return res.status(400).json({ error: 'Create NGO profile first' });
-    if (ngo.rows[0].status!== 'APPROVED') return res.status(403).json({ error: 'NGO not approved yet' });
+    const { title, description, category, target_amount, location, end_date, latitude, longitude, address } = value;
 
-    const image_url = req.file? req.file.path : null;
-    const { title, description, category, target_amount, location, end_date } = value;
+    const ngoCheck = await db.query(
+      'SELECT id FROM ngo_profiles WHERE user_id=$1 AND status=$2',
+      [req.user.id, 'APPROVED']
+    );
+    if (!ngoCheck.rows[0]) {
+      return res.status(403).json({ error: 'NGO not approved yet' });
+    }
 
-const campaign = await client.query(
-  `INSERT INTO campaigns (ngo_id, title, description, category, target_amount, end_date, latitude, longitude, address)
-   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-  [ngo.rows[0].id, title, description, category, target_amount, end_date || null, latitude, longitude, address]
-);
-    res.json({ data: campaign.rows[0] });
+    let image_url = null;
+    if (req.file) {
+      const upload = await cloudinary.uploader.upload(req.file.path, { folder: 'campaigns' });
+      image_url = upload.secure_url;
+      fs.unlinkSync(req.file.path);
+    }
+
+    const result = await db.query(
+      `INSERT INTO campaigns (ngo_id, title, description, category, target_amount, location, latitude, longitude, address, image_url, end_date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'ACTIVE') RETURNING *`,
+      [ngoCheck.rows[0].id, title, description, category, target_amount, location, latitude, longitude, address, image_url, end_date]
+    );
+
+    res.json({ data: result.rows[0] });
   } catch (e) { next(e); }
 });
 
@@ -179,6 +192,48 @@ router.get('/map', async (req, res, next) => {
         AND c.longitude IS NOT NULL
       ORDER BY c.created_at DESC
     `);
+    res.json({ data: result.rows });
+  } catch (e) { next(e); }
+});
+
+
+// GET /api/campaigns/nearby?lat=31.5204&lng=74.3587&radius=10
+router.get('/nearby', async (req, res, next) => {
+  try {
+    const { lat, lng, radius = 10 } = req.query; // radius in km
+    
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'lat and lng required' });
+    }
+
+    // Haversine formula to calculate distance in km
+    const result = await db.query(`
+      SELECT c.id, c.title, c.raised_amount, c.target_amount, c.category,
+             c.latitude, c.longitude, c.address, c.image_url,
+             n.org_name,
+             (
+               6371 * acos(
+                 cos(radians($1)) * cos(radians(c.latitude)) * 
+                 cos(radians(c.longitude) - radians($2)) + 
+                 sin(radians($1)) * sin(radians(c.latitude))
+               )
+             ) AS distance_km
+      FROM campaigns c
+      JOIN ngo_profiles n ON c.ngo_id = n.id
+      WHERE c.status = 'ACTIVE' 
+        AND c.latitude IS NOT NULL 
+        AND c.longitude IS NOT NULL
+        AND (
+          6371 * acos(
+            cos(radians($1)) * cos(radians(c.latitude)) * 
+            cos(radians(c.longitude) - radians($2)) + 
+            sin(radians($1)) * sin(radians(c.latitude))
+          )
+        ) <= $3
+      ORDER BY distance_km ASC
+      LIMIT 50
+    `, [lat, lng, radius]);
+    
     res.json({ data: result.rows });
   } catch (e) { next(e); }
 });

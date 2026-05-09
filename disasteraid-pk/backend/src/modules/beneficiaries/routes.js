@@ -7,13 +7,13 @@ const Joi = require('joi');
 const aidRequestSchema = Joi.object({
   campaign_id: Joi.number().integer().allow(null), // nullable for general
   category: Joi.string().valid('FOOD', 'MEDICAL', 'SHELTER', 'CLOTHING', 'OTHER').required(),
-  items_needed: Joi.array().items(Joi.string()).default([]), // ADD THIS
+  items_needed: Joi.array().items(Joi.string()).min(1).required(), // Changed: min 1 required
   description: Joi.string().min(10).max(1000).required(),
   urgency: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'CRITICAL').default('MEDIUM'),
   family_size: Joi.number().integer().min(1).max(50).default(1),
   location: Joi.string().min(5).required(),
-  lat: Joi.number().min(-90).max(90).allow(null),
-  lng: Joi.number().min(-180).max(180).allow(null),
+  latitude: Joi.number().min(-90).max(90).allow(null), // CHANGED from lat
+  longitude: Joi.number().min(-180).max(180).allow(null), // CHANGED from lng
 });
 
 // POST /api/aid-requests - Beneficiary creates request
@@ -22,7 +22,7 @@ router.post('/aid-requests', auth('beneficiary'), async (req, res, next) => {
     const { error, value } = aidRequestSchema.validate(req.body);
     if (error) return res.status(400).json({ error: error.details[0].message });
 
-    const { campaign_id, category, items_needed, description, urgency, family_size, location, lat, lng } = value;
+    const { campaign_id, category, items_needed, description, urgency, family_size, location, latitude, longitude } = value;
     let ngo_id = null;
 
     if (campaign_id) {
@@ -55,13 +55,14 @@ router.post('/aid-requests', auth('beneficiary'), async (req, res, next) => {
     }
 
     const result = await db.query(
-      `INSERT INTO aid_requests (beneficiary_id, campaign_id, ngo_id, category, items_needed, description, urgency, family_size, location, lat, lng, status)
+      `INSERT INTO aid_requests (beneficiary_id, campaign_id, ngo_id, category, items_needed, description, urgency, family_size, location, latitude, longitude, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'PENDING') RETURNING *`,
-      [req.user.id, campaign_id, ngo_id, category, JSON.stringify(items_needed), description, urgency, family_size, location, lat, lng]
+      [req.user.id, campaign_id, ngo_id, category, JSON.stringify(items_needed), description, urgency, family_size, location, latitude, longitude]
     );
     res.json({ data: result.rows[0] });
   } catch (e) { next(e); }
 });
+
 // GET /api/aid-requests/my - FIXED: LEFT JOIN for null campaign_id
 router.get('/aid-requests/my', auth('beneficiary'), async (req, res, next) => {
   try {
@@ -124,10 +125,10 @@ router.get('/map', auth('volunteer'), async (req, res, next) => {
     const { status = 'PENDING' } = req.query;
     const result = await db.query(`
       SELECT a.id, a.beneficiary_name, a.category, a.urgency,
-             a.latitude, a.longitude, a.address, a.family_size,
-             c.title as campaign_title
+             a.latitude, a.longitude, a.location as address, a.family_size,
+             COALESCE(c.title, 'General Request') as campaign_title
       FROM aid_requests a
-      JOIN campaigns c ON a.campaign_id = c.id
+      LEFT JOIN campaigns c ON a.campaign_id = c.id
       WHERE a.status = $1
         AND a.latitude IS NOT NULL
         AND a.longitude IS NOT NULL

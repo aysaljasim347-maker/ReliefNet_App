@@ -1,9 +1,11 @@
 import 'package:disasteraid_pk/features/beneficiaries/screens/beneficiary_map_screen.dart';
+import 'package:disasteraid_pk/features/chat/screens/chat_screen.dart';
+import 'package:disasteraid_pk/features/chat/screens/chat_list_screen.dart'; // ADD THIS
+import 'package:disasteraid_pk/features/chat/screens/services/chat_badge_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/api/api_client.dart';
-import '../../campaigns/screens/campaign_list_screen.dart';
 import 'request_aid_screen.dart';
 
 class BeneficiaryDashboard extends StatefulWidget {
@@ -18,20 +20,31 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
   final List<Widget> _screens = [
     const MyRequestsTab(),
     const BeneficiaryMapScreen(),
+    const ChatListScreen(), // ADD THIS
     const BeneficiaryProfileTab(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final unreadCount = context.watch<ChatBadgeProvider>().unreadCount; // ADD THIS
+
     return Scaffold(
       body: _screens[_index],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.list_alt), label: 'My Requests'),
-          NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
+        destinations: [
+          const NavigationDestination(icon: Icon(Icons.list_alt), label: 'My Requests'),
+          const NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
+          NavigationDestination( // UPDATE THIS
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.chat_bubble_outline),
+            ),
+            label: 'Chat',
+          ),
+          const NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
       floatingActionButton: _index == 0? FloatingActionButton.extended(
@@ -53,7 +66,7 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
   }
 }
 
-// Tab 1: My Requests - moved your old code here
+// Tab 1: My Requests - no changes needed, you already added chat button
 class MyRequestsTab extends StatefulWidget {
   const MyRequestsTab({super.key});
   @override
@@ -110,7 +123,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
       body: RefreshIndicator(
         onRefresh: _loadRequests,
         child: _myRequests.isEmpty
-        ? Center(
+       ? Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -153,31 +166,50 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
                         backgroundColor: _statusColor(r['status']).withOpacity(0.1),
                         labelStyle: TextStyle(color: _statusColor(r['status'])),
                       ),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (r['volunteer_name']!= null)...[
-                                Text('Assigned Volunteer', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[700])),
-                                const SizedBox(height: 4),
-                                Text('${r['volunteer_name']} - ${r['volunteer_phone']?? 'N/A'}'),
-                                const SizedBox(height: 12),
-                              ],
-                              Text('Description', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[700])),
-                              const SizedBox(height: 4),
-                              Text(r['description']?? 'No description'),
-                              if (r['rejection_reason']!= null)...[
-                                const SizedBox(height: 12),
-                                Text('Rejection Reason', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red[700])),
-                                const SizedBox(height: 4),
-                                Text(r['rejection_reason'], style: TextStyle(color: Colors.red[700])),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
+children: [
+  Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (r['volunteer_name']!= null)...[
+          Text('Assigned Volunteer', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[700])),
+          const SizedBox(height: 4),
+          Text('${r['volunteer_name']} - ${r['volunteer_phone']?? 'N/A'}'),
+          const SizedBox(height: 12),
+        ],
+        Text('Description', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[700])),
+        const SizedBox(height: 4),
+        Text(r['description']?? 'No description'),
+        if (r['rejection_reason']!= null)...[
+          const SizedBox(height: 12),
+          Text('Rejection Reason', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red[700])),
+          const SizedBox(height: 4),
+          Text(r['rejection_reason'], style: TextStyle(color: Colors.red[700])),
+        ],
+        if (r['volunteer_name']!= null &&
+            ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'IN_PROGRESS'].contains(r['status']))...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    requestId: r['id'],
+                    otherUserName: r['volunteer_name']?? 'Volunteer',
+                  ),
+                ));
+              },
+              icon: const Icon(Icons.chat),
+              label: const Text('Chat with Volunteer'),
+            ),
+          ),
+        ],
+      ],
+    ),
+  ),
+],
                     ),
                   );
                 },
@@ -187,7 +219,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
   }
 }
 
-// Tab 3: Profile
+// Tab 3: Profile - no changes
 class BeneficiaryProfileTab extends StatelessWidget {
   const BeneficiaryProfileTab({super.key});
 

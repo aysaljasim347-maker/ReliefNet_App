@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/widgets/location_picker.dart';
 
 class RequestAidScreen extends StatefulWidget {
   final int? campaignId; // nullable for general requests
@@ -15,7 +17,6 @@ class RequestAidScreen extends StatefulWidget {
 class _RequestAidScreenState extends State<RequestAidScreen> {
   final _formKey = GlobalKey<FormState>();
   final _descController = TextEditingController();
-  final _locationController = TextEditingController();
   final _familySizeController = TextEditingController(text: '1');
 
   String _urgency = 'MEDIUM';
@@ -23,6 +24,10 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
   final List<String> _selectedItems = ['food']; // Detailed items
   bool _loading = false;
   final _api = ApiClient();
+
+  // ADDED: Location fields
+  LatLng? _requestLocation;
+  String _requestAddress = '';
 
   final Map<String, String> _itemOptions = {
     'food': 'Food/Rashan',
@@ -45,7 +50,6 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
   @override
   void dispose() {
     _descController.dispose();
-    _locationController.dispose();
     _familySizeController.dispose();
     super.dispose();
   }
@@ -66,6 +70,12 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
       );
       return;
     }
+    if (_requestLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select your location')),
+      );
+      return;
+    }
 
     setState(() => _loading = true);
     try {
@@ -76,7 +86,9 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
         'description': _descController.text.trim(),
         'urgency': _urgency,
         'family_size': int.parse(_familySizeController.text),
-        'location': _locationController.text.trim(),
+        'location': _requestAddress, // Changed from _locationController
+        'latitude': _requestLocation!.latitude, // ADDED
+        'longitude': _requestLocation!.longitude, // ADDED
       });
 
       if (mounted) {
@@ -183,8 +195,8 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
                       prefixIcon: Icon(Icons.warning, color: _urgencyColor(_urgency)),
                     ),
                     items: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
-                     .map((u) => DropdownMenuItem(value: u, child: Text(u)))
-                     .toList(),
+                    .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                    .toList(),
                     onChanged: (v) => setState(() => _urgency = v!),
                   ),
                 ),
@@ -209,16 +221,18 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
                 ),
               ],
             ),
+            // REMOVED: Old TextFormField for location
+            // ADDED: LocationPicker widget
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _locationController,
-              decoration: InputDecoration(
-                labelText: 'Your Address/Location',
-                hintText: 'Village, Tehsil, District',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                prefixIcon: const Icon(Icons.location_on),
-              ),
-              validator: (v) => v!.trim().isEmpty? 'Location required' : null,
+            Text('Your Location', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            LocationPicker(
+              onLocationPicked: (latLng, address) {
+                setState(() {
+                  _requestLocation = latLng;
+                  _requestAddress = address;
+                });
+              },
             ),
             const SizedBox(height: 32),
             FilledButton.icon(

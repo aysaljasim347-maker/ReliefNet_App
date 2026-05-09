@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:disasteraid_pk/core/api/api_client.dart';
 import 'package:disasteraid_pk/core/auth/auth_provider.dart';
+import 'package:disasteraid_pk/features/chat/screens/chat_screen.dart';
 import 'package:disasteraid_pk/features/volunteers/complete_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -346,35 +347,57 @@ class _VolunteerTasksScreenState extends State<VolunteerTasksScreen> with Single
       ),
     );
   }
+Widget _buildActionButton(Map t) {
+  final status = t['status'];
+  final canChat = ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'].contains(status);
 
-  Widget _buildActionButton(Map t) {
-    switch (t['status']) {
-      case 'ASSIGNED':
-        return FilledButton.icon(
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      // Existing status buttons
+      if (status == 'ASSIGNED')
+        FilledButton.icon(
           onPressed: () => _updateStatus(t['id'], 'PICKED_UP'),
           icon: const Icon(Icons.shopping_bag),
           label: const Text('Mark Picked Up'),
-        );
-      case 'PICKED_UP':
-        return FilledButton.icon(
+        )
+      else if (status == 'PICKED_UP')
+        FilledButton.icon(
           onPressed: () => _updateStatus(t['id'], 'IN_TRANSIT'),
           icon: const Icon(Icons.local_shipping),
           label: const Text('Mark In Transit'),
-        );
-      case 'IN_TRANSIT':
-        return FilledButton.icon(
+        )
+      else if (status == 'IN_TRANSIT')
+        FilledButton.icon(
           onPressed: () => _showDeliveryDialog(t['id']),
           icon: const Icon(Icons.camera_alt),
           label: const Text('Mark Delivered + Photo'),
-        );
-      case 'DELIVERED':
-        return Chip(
+        )
+      else if (status == 'DELIVERED')
+        Chip(
           avatar: const Icon(Icons.check, color: Colors.green),
           label: const Text('Completed'),
           backgroundColor: Colors.green[50],
-        );
-      default:
-        return const SizedBox.shrink();
-    }
-  }
+        ),
+
+      // ADD CHAT BUTTON
+      if (canChat)...[
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => ChatScreen(
+                requestId: t['id'],
+                otherUserName: t['beneficiary_name']?? 'Beneficiary',
+              ),
+            ));
+          },
+          icon: const Icon(Icons.chat),
+          label: const Text('Chat with Beneficiary'),
+        ),
+      ],
+    ],
+  );
+}
+
 }

@@ -1,4 +1,3 @@
-
 import 'package:disasteraid_pk/core/api/api_client.dart';
 import 'package:disasteraid_pk/core/auth/auth_provider.dart';
 import 'package:disasteraid_pk/core/services/socket_serivce.dart';
@@ -7,13 +6,13 @@ import 'package:disasteraid_pk/features/auth/login_screen.dart';
 import 'package:disasteraid_pk/features/auth/register_screen.dart';
 import 'package:disasteraid_pk/features/beneficiaries/screens/beneficiary_dashboard.dart';
 import 'package:disasteraid_pk/features/campaigns/screens/campaign_create_screen.dart';
+import 'package:disasteraid_pk/features/chat/screens/services/chat_badge_provider.dart';
 import 'package:disasteraid_pk/features/donor/donor_dashboard.dart';
 import 'package:disasteraid_pk/features/maps/campaign_map_screen.dart';
 import 'package:disasteraid_pk/features/ngo/ngo_dashboard.dart';
 import 'package:disasteraid_pk/features/ngo/ngo_onboard_screen.dart';
 import 'package:disasteraid_pk/features/volunteers/complete_profile_screen.dart';
 import 'package:disasteraid_pk/features/volunteers/volunteer_dashboard.dart';
-import 'package:disasteraid_pk/features/volunteers/volunteer_tasks_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -28,8 +27,11 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider()..checkAuth(),
+    return MultiProvider( // CHANGED FROM ChangeNotifierProvider
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuth()),
+        ChangeNotifierProvider(create: (_) => ChatBadgeProvider()), // ADD THIS
+      ],
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           return MaterialApp(
@@ -39,10 +41,9 @@ class MyApp extends StatelessWidget {
               useMaterial3: true,
             ),
             debugShowCheckedModeBanner: false,
-            // REMOVE home: property completely
-            initialRoute: auth.isAuthenticated ? '/' : '/login', // ADD THIS
+            initialRoute: auth.isAuthenticated ? '/' : '/login',
             routes: {
-              '/': (_) => const AppShell(), // Now this is OK
+              '/': (_) => const AppShell(),
               '/login': (_) => const LoginScreen(),
               '/register': (_) => const RegisterScreen(),
               '/ngo/onboard': (_) => const NgoOnboardScreen(),
@@ -56,17 +57,17 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
-
 class _AppShellState extends State<AppShell> {
   String? _ngoStatus;
   bool _loadingStatus = true;
-  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>(); // ADD THIS
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
   void initState() {
@@ -80,14 +81,15 @@ class _AppShellState extends State<AppShell> {
   }
 
   @override
-  void didChangeDependencies() { // ADD THIS METHOD
+  void didChangeDependencies() {
     super.didChangeDependencies();
     final user = context.read<AuthProvider>().user;
     if (user != null && user['id'] != null) {
-      // Connect socket after login
       SocketService().connect(user['id']);
       
-      // Listen for notifications
+      // Load unread chat count on login
+      context.read<ChatBadgeProvider>().refreshUnread(); // ADD THIS
+      
       SocketService().onNotification = (data) {
         _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
@@ -102,14 +104,22 @@ class _AppShellState extends State<AppShell> {
           ),
         );
       };
+
+      // ADD THIS: Refresh badge on new message
+      SocketService().on('new_message', (data) {
+        if (mounted) {
+          context.read<ChatBadgeProvider>().refreshUnread();
+        }
+      });
     }
   }
 
   @override
-  void dispose() { // ADD THIS
+  void dispose() {
     SocketService().disconnect();
     super.dispose();
   }
+
   Future<void> _fetchNgoStatus() async {
     try {
       final api = ApiClient();
@@ -129,13 +139,12 @@ class _AppShellState extends State<AppShell> {
 
     if (_loadingStatus) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    // Wrap your return with ScaffoldMessenger
     return ScaffoldMessenger(
-      key: _scaffoldMessengerKey, // ADD THIS
+      key: _scaffoldMessengerKey,
       child: switch (role) {
         'admin' => const AdminDashboard(),
         'ngo' => _ngoStatus == 'APPROVED' 
-            ? const NgoDashboard() 
+           ? const NgoDashboard() 
             : NgoStatusScreen(status: _ngoStatus, onRefresh: _fetchNgoStatus),
         'donor' => const DonorDashboard(),
         'volunteer' => const VolunteerDashboard(),

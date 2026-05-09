@@ -1,6 +1,8 @@
+import 'package:disasteraid_pk/features/chat/screens/services/chat_badge_provider.dart';
 import 'package:disasteraid_pk/features/volunteers/complete_profile_screen.dart';
 import 'package:disasteraid_pk/features/volunteers/volunteer_tasks_screen.dart';
 import 'package:disasteraid_pk/features/volunteers/volunteer_map_screen.dart';
+import 'package:disasteraid_pk/features/chat/screens/chat_list_screen.dart'; // ADD THIS
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
@@ -17,11 +19,14 @@ class _VolunteerDashboardState extends State<VolunteerDashboard> {
   final List<Widget> _screens = [
     const VolunteerTasksTab(),
     const VolunteerMapScreen(),
+    const ChatListScreen(), // ADD THIS
     const VolunteerProfileTab(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final unreadCount = context.watch<ChatBadgeProvider>().unreadCount; // ADD THIS
+
     return Scaffold(
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
@@ -29,16 +34,24 @@ class _VolunteerDashboardState extends State<VolunteerDashboard> {
         onTap: (index) => setState(() => _currentIndex = index),
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.green,
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.assignment),
             label: 'Tasks',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.map),
             label: 'Map',
           ),
-          BottomNavigationBarItem(
+          BottomNavigationBarItem( // UPDATE THIS
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.chat_bubble_outline),
+            ),
+            label: 'Chat',
+          ),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.person),
             label: 'Profile',
           ),
@@ -81,7 +94,6 @@ class VolunteerProfileTab extends StatelessWidget {
               title: const Text('Edit Profile'),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
-                // Navigate to CompleteProfileScreen in edit mode
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const CompleteProfileScreen()));
               },
             ),

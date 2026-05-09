@@ -14,6 +14,17 @@ function init(server) {
       console.log(`User ${userId} joined room`);
     });
 
+    // ADD THESE 2 FOR CHAT
+    socket.on('join_request', (requestId) => {
+      socket.join(`request_${requestId}`);
+      console.log(`Socket ${socket.id} joined request_${requestId}`);
+    });
+
+    socket.on('leave_request', (requestId) => {
+      socket.leave(`request_${requestId}`);
+      console.log(`Socket ${socket.id} left request_${requestId}`);
+    });
+
     socket.on('disconnect', () => {
       console.log('Socket disconnected:', socket.id);
     });
@@ -27,4 +38,8 @@ function sendToUser(userId, event, data) {
   }
 }
 
-module.exports = { init, sendToUser };
+function getIO() {
+  return io;
+}
+
+module.exports = { init, sendToUser, getIO };
