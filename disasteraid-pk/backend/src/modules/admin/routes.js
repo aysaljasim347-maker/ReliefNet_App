@@ -4,6 +4,7 @@ const db = require('../../config/db');
 const auth = require('../../middleware/auth');
 
 const { logAction } = require('../../utils/audit'); // ADD THIS
+const upload = require('../../utils/upload');
 
 
 
@@ -328,41 +329,120 @@ router.get('/withdrawals', auth('admin'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// PATCH /api/admin/withdrawals/:id - Approve/Reject withdrawal
-router.patch('/withdrawals/:id', auth('admin'), async (req, res, next) => {
-  const { status, rejection_reason, transaction_ref } = req.body;
+// PATCH /api/admin/withdrawals/:id - Approve/Reject/Complete
+// router.patch('/withdrawals/:id', auth('admin'), upload.single('proof'), async (req, res, next) => {
+//   const { status, admin_notes, rejection_reason, transaction_ref } = req.body;
+//   const client = await db.connect();
+
+//   try {
+//     if (!['APPROVED', 'COMPLETED', 'REJECTED'].includes(status)) throw new Error('Invalid status');
+//     await client.query('BEGIN');
+
+//     const w = await client.query(`SELECT * FROM withdrawal_requests WHERE id = $1 FOR UPDATE`, [req.params.id]);
+//     if (!w.rows[0]) throw new Error('Withdrawal not found');
+//     const withdrawal = w.rows[0];
+
+//     if (status === 'APPROVED' && withdrawal.status!== 'PENDING') throw new Error('Can only approve PENDING');
+//     if (status === 'COMPLETED' && withdrawal.status!== 'APPROVED') throw new Error('Must approve before completing');
+//     if (status === 'COMPLETED' &&!req.file) throw new Error('Upload transfer proof to complete');
+//     if (status === 'REJECTED' && withdrawal.status!== 'PENDING') throw new Error('Can only reject PENDING');
+
+//     // Debit wallet ONLY on COMPLETED
+//     if (status === 'COMPLETED') {
+//       const wallet = await client.query(`SELECT balance FROM ngo_wallets WHERE ngo_id = $1 FOR UPDATE`, [withdrawal.ngo_id]);
+//       if (!wallet.rows[0]) throw new Error('Wallet not found');
+//       if (parseFloat(wallet.rows[0].balance) < parseFloat(withdrawal.amount)) {
+//         throw new Error('Insufficient wallet balance');
+//       }
+
+//       await client.query(
+//         `UPDATE ngo_wallets SET balance = balance - $1, total_withdrawn = total_withdrawn + $1 WHERE ngo_id = $2`,
+//         [withdrawal.amount, withdrawal.ngo_id]
+//       );
+//     }
+
+//     const result = await client.query(`
+//       UPDATE withdrawal_requests SET
+//         status = $1, admin_notes = $2, rejection_reason = $3,
+//         transfer_proof_url = $4, approved_by = $5, processed_at = NOW(),
+//         transaction_ref = $6
+//       WHERE id = $7 RETURNING *
+//     `, [status, admin_notes, rejection_reason, req.file?.path || null, req.user.id, transaction_ref || null, req.params.id]);
+
+//     await logAction({
+//       adminId: req.user.id,
+//       action: `WITHDRAWAL_${status}`,
+//       targetType: 'withdrawal',
+//       targetId: withdrawal.id,
+//       oldValue: { status: withdrawal.status },
+//       newValue: { status: status },
+//       reason: admin_notes || rejection_reason,
+//       req: req,
+//     });
+
+//     await client.query('COMMIT');
+//     res.json({ data: result.rows[0] });
+//   } catch (e) {
+//     await client.query('ROLLBACK');
+//     res.status(400).json({ error: e.message });
+//   } finally {
+//     client.release();
+//   }
+// });
+
+// PATCH /api/admin/withdrawals/:id - Approve/Reject/Complete
+router.patch('/withdrawals/:id', auth('admin'), upload.single('proof'), async (req, res, next) => {
+  const { status, admin_notes, rejection_reason, transaction_ref } = req.body;
   const client = await db.connect();
 
   try {
+    if (!['APPROVED', 'COMPLETED', 'REJECTED'].includes(status)) throw new Error('Invalid status');
     await client.query('BEGIN');
-    const withdrawal = await client.query('SELECT * FROM withdrawal_requests WHERE id = $1 FOR UPDATE', [req.params.id]);
-    if (!withdrawal.rows[0]) throw new Error('Withdrawal not found');
-    if (withdrawal.rows[0].status!== 'PENDING') throw new Error('Already processed');
 
-    if (status === 'APPROVED') {
+    const w = await client.query(`SELECT * FROM withdrawal_requests WHERE id = $1 FOR UPDATE`, [req.params.id]);
+    if (!w.rows[0]) throw new Error('Withdrawal not found');
+    const withdrawal = w.rows[0];
+
+    if (status === 'APPROVED' && withdrawal.status!== 'PENDING') throw new Error('Can only approve PENDING');
+    if (status === 'COMPLETED' && withdrawal.status!== 'APPROVED') throw new Error('Must approve before completing');
+    if (status === 'COMPLETED' &&!req.file) throw new Error('Upload transfer proof to complete');
+    if (status === 'REJECTED' && withdrawal.status!== 'PENDING') throw new Error('Can only reject PENDING');
+
+    // Debit wallet ONLY on COMPLETED
+    if (status === 'COMPLETED') {
+      const wallet = await client.query(`SELECT balance FROM ngo_wallets WHERE ngo_id = $1 FOR UPDATE`, [withdrawal.ngo_id]);
+      if (!wallet.rows[0]) throw new Error('Wallet not found');
+      if (parseFloat(wallet.rows[0].balance) < parseFloat(withdrawal.amount)) {
+        throw new Error('Insufficient wallet balance');
+      }
+
       await client.query(
-        `UPDATE withdrawal_requests SET status='APPROVED', approved_by=$1, transaction_ref=$2, processed_at=NOW() WHERE id=$3`,
-        [req.user.id, transaction_ref || `TXN_${Date.now()}`, req.params.id]
+        `UPDATE ngo_wallets SET balance = balance - $1, total_withdrawn = total_withdrawn + $1 WHERE ngo_id = $2`,
+        [withdrawal.amount, withdrawal.ngo_id]
       );
-      await client.query(
-        'UPDATE ngo_wallets SET total_withdrawn = total_withdrawn + $1 WHERE ngo_id = $2',
-        [withdrawal.rows[0].amount, withdrawal.rows[0].ngo_id]
-      );
-    } else if (status === 'REJECTED') {
-      await client.query(
-        `UPDATE withdrawal_requests SET status='REJECTED', rejection_reason=$1, processed_at=NOW() WHERE id=$2`,
-        [rejection_reason || 'Not specified', req.params.id]
-      );
-      await client.query(
-        'UPDATE ngo_wallets SET balance = balance + $1 WHERE ngo_id = $2',
-        [withdrawal.rows[0].amount, withdrawal.rows[0].ngo_id]
-      );
-    } else {
-      throw new Error('Invalid status');
     }
 
+    const result = await client.query(`
+      UPDATE withdrawal_requests SET
+        status = $1, admin_notes = $2, rejection_reason = $3,
+        transfer_proof_url = $4, approved_by = $5, processed_at = NOW(),
+        transaction_ref = $6
+      WHERE id = $7 RETURNING *
+    `, [status, admin_notes, rejection_reason, req.file?.path || null, req.user.id, transaction_ref || null, req.params.id]);
+
+    await logAction({
+      adminId: req.user.id,
+      action: `WITHDRAWAL_${status}`,
+      targetType: 'withdrawal',
+      targetId: withdrawal.id,
+      oldValue: { status: withdrawal.status },
+      newValue: { status: status },
+      reason: admin_notes || rejection_reason,
+      req: req,
+    });
+
     await client.query('COMMIT');
-    res.json({ success: true });
+    res.json({ data: result.rows[0] });
   } catch (e) {
     await client.query('ROLLBACK');
     res.status(400).json({ error: e.message });
@@ -370,8 +450,6 @@ router.patch('/withdrawals/:id', auth('admin'), async (req, res, next) => {
     client.release();
   }
 });
-
-
 
 
 // POST /api/reports - Any user can report
@@ -512,4 +590,23 @@ router.patch('/ngos/:id/status', auth('admin'), async (req, res, next) => {
   }
 });
 
+
+
+// /backend/modules/aids/routes.js
+
+// Add this at bottom, after other routes
+router.get('/delivered', auth('admin'), async (req, res, next) => {
+  try {
+    const result = await db.query(`
+      SELECT ar.id, ar.delivery_proof_url, ar.delivered_at, ar.delivery_notes,
+             u.name as delivered_by_name, ar.beneficiary_name as victim_name, n.org_name
+      FROM aid_requests ar
+      JOIN users u ON ar.delivered_by = u.id
+      JOIN ngo_profiles n ON ar.ngo_id = n.id
+      WHERE ar.status = 'DELIVERED'
+      ORDER BY ar.delivered_at DESC
+    `);
+    res.json({ data: result.rows });
+  } catch (e) { next(e); }
+});
 module.exports = router;

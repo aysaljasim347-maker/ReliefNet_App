@@ -1,3 +1,4 @@
+import 'package:disasteraid_pk/core/services/socket_serivce.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api/api_client.dart';
@@ -77,6 +78,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    SocketService().disconnect();
     await _storage.delete(key: 'token');
     _isAuthenticated = false;
     _user = null;

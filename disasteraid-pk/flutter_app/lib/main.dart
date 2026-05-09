@@ -1,12 +1,13 @@
 
 import 'package:disasteraid_pk/core/api/api_client.dart';
 import 'package:disasteraid_pk/core/auth/auth_provider.dart';
+import 'package:disasteraid_pk/core/services/socket_serivce.dart';
 import 'package:disasteraid_pk/features/admin/admin_dashboard.dart';
 import 'package:disasteraid_pk/features/auth/login_screen.dart';
 import 'package:disasteraid_pk/features/auth/register_screen.dart';
 import 'package:disasteraid_pk/features/beneficiaries/screens/beneficiary_dashboard.dart';
 import 'package:disasteraid_pk/features/campaigns/screens/campaign_create_screen.dart';
-import 'package:disasteraid_pk/features/campaigns/screens/campaign_list_screen.dart';
+import 'package:disasteraid_pk/features/donor/donor_dashboard.dart';
 import 'package:disasteraid_pk/features/ngo/ngo_dashboard.dart';
 import 'package:disasteraid_pk/features/ngo/ngo_onboard_screen.dart';
 import 'package:disasteraid_pk/features/volunteers/complete_profile_screen.dart';
@@ -58,9 +59,11 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
+
 class _AppShellState extends State<AppShell> {
   String? _ngoStatus;
   bool _loadingStatus = true;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>(); // ADD THIS
 
   @override
   void initState() {
@@ -73,6 +76,37 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  @override
+  void didChangeDependencies() { // ADD THIS METHOD
+    super.didChangeDependencies();
+    final user = context.read<AuthProvider>().user;
+    if (user != null && user['id'] != null) {
+      // Connect socket after login
+      SocketService().connect(user['id']);
+      
+      // Listen for notifications
+      SocketService().onNotification = (data) {
+        _scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Text(data['title'] ?? 'New notification'),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'View',
+              onPressed: () {
+                // TODO: Navigate to notifications screen
+              },
+            ),
+          ),
+        );
+      };
+    }
+  }
+
+  @override
+  void dispose() { // ADD THIS
+    SocketService().disconnect();
+    super.dispose();
+  }
   Future<void> _fetchNgoStatus() async {
     try {
       final api = ApiClient();
@@ -92,22 +126,20 @@ class _AppShellState extends State<AppShell> {
 
     if (_loadingStatus) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    switch (role) {
-      case 'admin':
-        return const AdminDashboard();
-      case 'ngo':
-        if (_ngoStatus == 'APPROVED') return const NgoDashboard();
-        return NgoStatusScreen(status: _ngoStatus, onRefresh: _fetchNgoStatus);
-      case 'donor':
-        return const CampaignListScreen();
-      case 'volunteer':
-        return const VolunteerTasksScreen();
-      case 'beneficiary':
-        // Beneficiary needs to pick a campaign first, so show campaign list
-        return const BeneficiaryDashboard();
-      default:
-        return const LoginScreen();
-    }
+    // Wrap your return with ScaffoldMessenger
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey, // ADD THIS
+      child: switch (role) {
+        'admin' => const AdminDashboard(),
+        'ngo' => _ngoStatus == 'APPROVED' 
+            ? const NgoDashboard() 
+            : NgoStatusScreen(status: _ngoStatus, onRefresh: _fetchNgoStatus),
+        'donor' => const DonorDashboard(),
+        'volunteer' => const VolunteerTasksScreen(),
+        'beneficiary' => const BeneficiaryDashboard(),
+        _ => const LoginScreen(),
+      },
+    );
   }
 }
 

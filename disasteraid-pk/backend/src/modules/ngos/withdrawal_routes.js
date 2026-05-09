@@ -67,7 +67,11 @@ router.get('/withdrawals', auth('ngo'), async (req, res, next) => {
     if (!ngo.rows[0]) return res.json({ data: [] });
 
     const result = await db.query(
-      'SELECT * FROM withdrawal_requests WHERE ngo_id = $1 ORDER BY requested_at DESC LIMIT 50', // FIXED: requested_at
+      `SELECT *, created_at AS requested_at
+FROM withdrawal_requests
+WHERE ngo_id = $1
+ORDER BY created_at DESC
+LIMIT 50`, // FIXED: requested_at
       [ngo.rows[0].id]
     );
     res.json({ data: result.rows });
@@ -96,15 +100,23 @@ router.get('/admin/withdrawals', auth('admin'), async (req, res, next) => {
   try {
     const { status = 'PENDING' } = req.query;
     const result = await db.query(`
-      SELECT w.*, n.org_name, u.email as requester_email
-      FROM withdrawal_requests w
-      JOIN ngo_profiles n ON w.ngo_id = n.id
-      JOIN users u ON w.requested_by = u.id
-      WHERE w.status = $1
-      ORDER BY w.requested_at ASC
-    `, [status]);
-    res.json({ data: result.rows });
-  } catch (e) { next(e); }
+  SELECT 
+    w.*,
+    w.created_at AS requested_at,
+    n.org_name,
+    u.email AS requester_email
+  FROM withdrawal_requests w
+  JOIN ngo_profiles n ON w.ngo_id = n.id
+  JOIN users u ON n.user_id = u.id
+  WHERE w.status = $1
+  ORDER BY requested_at ASC
+`, [status]);
+
+res.json({ data: result.rows });
+
+} catch (e) {
+next(e);
+}
 });
 
 // PATCH /api/admin/withdrawals/:id - Admin approves/rejects/completes

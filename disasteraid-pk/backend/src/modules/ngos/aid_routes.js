@@ -4,6 +4,10 @@ const db = require('../../config/db');
 const auth = require('../../middleware/auth');
 const Joi = require('joi');
 
+const upload = require('../../utils/upload'); // multer config
+
+
+
 const updateRequestSchema = Joi.object({
   status: Joi.string().valid('APPROVED', 'REJECTED', 'ASSIGNED').required(),
   volunteer_id: Joi.number().integer().allow(null),
@@ -110,5 +114,69 @@ router.get('/aid-requests/:id', auth('ngo'), async (req, res, next) => {
     res.json({ data: result.rows[0] });
   } catch (e) { next(e); }
 });
+
+
+
+// PATCH /api/aids/:id/deliver - Mark as delivered with photo proof
+router.patch('/:id/deliver', auth('volunteer'), upload.single('proof'), async (req, res, next) => {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const aid = await client.query('SELECT * FROM aid_requests WHERE id = $1 FOR UPDATE', [req.params.id]);
+    if (!aid.rows[0]) throw new Error('Aid request not found');
+    if (aid.rows[0].status!== 'APPROVED') throw new Error('Aid must be APPROVED first');
+    if (!req.file) throw new Error('Delivery photo required');
+
+    // Only assigned volunteer or NGO owner can mark delivered
+    const isVolunteer = aid.rows[0].assigned_volunteer_id === req.user.id;
+    const ngo = await client.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
+    const isNgoOwner = ngo.rows[0]?.id === aid.rows[0].ngo_id;
+
+    if (!isVolunteer &&!isNgoOwner) throw new Error('Not authorized to deliver this aid');
+
+    const result = await client.query(`
+      UPDATE aid_requests SET
+        status = 'DELIVERED',
+        delivery_proof_url = $1,
+        delivered_at = NOW(),
+        delivered_by = $2,
+        delivery_notes = $3,
+        updated_at = NOW()
+      WHERE id = $4
+      RETURNING *
+    `, [req.file.path, req.user.id, req.body.notes || null, req.params.id]);
+
+    await client.query('COMMIT');
+    res.json({ data: result.rows[0], message: 'Aid marked as delivered' });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/aids/:id/proof - View delivery proof
+router.get('/:id/proof', auth(), async (req, res, next) => {
+  try {
+    const result = await db.query(`
+      SELECT ar.id, ar.status, ar.delivery_proof_url, ar.delivered_at, ar.delivery_notes,
+             u.name as delivered_by_name, u.phone as delivered_by_phone,
+             n.org_name
+      FROM aid_requests ar
+      LEFT JOIN users u ON ar.delivered_by = u.id
+      JOIN ngo_profiles n ON ar.ngo_id = n.id
+      WHERE ar.id = $1
+    `, [req.params.id]);
+
+    if (!result.rows[0]) return res.status(404).json({ error: 'Aid request not found' });
+    if (!result.rows[0].delivery_proof_url) return res.status(404).json({ error: 'No delivery proof uploaded yet' });
+
+    res.json({ data: result.rows[0] });
+  } catch (e) { next(e); }
+});
+
+
 
 module.exports = router;

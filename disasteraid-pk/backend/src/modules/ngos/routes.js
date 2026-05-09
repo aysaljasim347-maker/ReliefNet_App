@@ -74,4 +74,88 @@ router.get('/profile', auth('ngo'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+
+
+
+// GET /api/ngo/dashboard/stats - KPI cards
+router.get('/dashboard/stats', auth('ngo'), async (req, res, next) => {
+  try {
+    const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
+    if (!ngo.rows[0]) return res.status(403).json({ error: 'NGO profile not found' });
+    const ngoId = ngo.rows[0].id;
+
+    const result = await db.query(`
+      SELECT
+        (SELECT COALESCE(balance, 0) FROM ngo_wallets WHERE ngo_id = $1) as wallet_balance,
+        (SELECT COALESCE(total_received, 0) FROM ngo_wallets WHERE ngo_id = $1) as total_raised,
+        (SELECT COUNT(*) FROM campaigns WHERE ngo_id = $1) as total_campaigns,
+        (SELECT COUNT(*) FROM campaigns WHERE ngo_id = $1 AND status = 'ACTIVE') as active_campaigns,
+        (SELECT COUNT(DISTINCT d.user_id) FROM donations d
+         JOIN campaigns c ON d.campaign_id = c.id
+         WHERE c.ngo_id = $1 AND d.status = 'VERIFIED') as total_donors,
+        (SELECT COUNT(*) FROM aid_requests ar WHERE ar.ngo_id = $1) as total_aid_requests,
+        (SELECT COUNT(*) FROM aid_requests ar WHERE ar.ngo_id = $1 AND ar.status = 'DELIVERED') as delivered_count,
+        (SELECT COUNT(*) FROM withdrawal_requests WHERE ngo_id = $1 AND status = 'PENDING') as pending_withdrawals
+    `, [ngoId]);
+
+    const stats = result.rows[0];
+    const deliveryRate = stats.total_aid_requests > 0
+    ? ((stats.delivered_count / stats.total_aid_requests) * 100).toFixed(1)
+      : 0;
+
+    res.json({
+      data: {
+      ...stats,
+        delivery_rate: parseFloat(deliveryRate)
+      }
+    });
+  } catch (e) { next(e); }
+});
+
+// GET /api/ngo/dashboard/chart?days=30 - Donations over time
+router.get('/dashboard/chart', auth('ngo'), async (req, res, next) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
+    if (!ngo.rows[0]) return res.status(403).json({ error: 'NGO profile not found' });
+
+    const result = await db.query(`
+      SELECT
+        DATE(d.verified_at) as date,
+        SUM(d.amount)::int as amount,
+        COUNT(d.id)::int as count
+      FROM donations d
+      JOIN campaigns c ON d.campaign_id = c.id
+      WHERE c.ngo_id = $1
+        AND d.status = 'VERIFIED'
+        AND d.verified_at >= NOW() - INTERVAL '${days} days'
+      GROUP BY DATE(d.verified_at)
+      ORDER BY date ASC
+    `, [ngo.rows[0].id]);
+
+    res.json({ data: result.rows });
+  } catch (e) { next(e); }
+});
+
+// GET /api/ngo/dashboard/recent - Last 5 donations
+router.get('/dashboard/recent', auth('ngo'), async (req, res, next) => {
+  try {
+    const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
+    if (!ngo.rows[0]) return res.status(403).json({ error: 'NGO profile not found' });
+
+    const result = await db.query(`
+      SELECT d.id, d.amount, d.verified_at, d.donor_name, c.title as campaign_title
+      FROM donations d
+      JOIN campaigns c ON d.campaign_id = c.id
+      WHERE c.ngo_id = $1 AND d.status = 'VERIFIED'
+      ORDER BY d.verified_at DESC
+      LIMIT 5
+    `, [ngo.rows[0].id]);
+
+    res.json({ data: result.rows });
+  } catch (e) { next(e); }
+});
+
+
+
 module.exports = router;

@@ -5,8 +5,10 @@ const auth = require('../../middleware/auth');
 const Joi = require('joi');
 const { v4: uuidv4 } = require('uuid'); // add
 
-
-
+const { generateDonationReceipt } = require('../../utils/pdf-receipts');
+const { sendReceiptEmail } = require('../../utils/mailer');
+const path = require('path')
+const { createNotification } = require('../../utils/notify');
 
 const upload = require('../../utils/upload'); // Cloudinary from Phase 0.3
 
@@ -125,10 +127,13 @@ router.post('/', auth(), async (req, res, next) => {
   }
 });
 // GET /api/donations/my - Donor's donation history
+// GET /api/donations/my - Donor's donation history
 router.get('/my', auth(), async (req, res, next) => {
   try {
     const result = await db.query(`
-      SELECT d.*, c.title as campaign_title, c.image_url, c.status as campaign_status,
+      SELECT d.id, d.amount, d.status, d.created_at, d.verified_at, d.receipt_url,
+             d.transaction_ref, d.payment_method,
+             c.title as campaign_title, c.image_url, c.status as campaign_status,
              n.org_name, n.id as ngo_id
       FROM donations d
       JOIN campaigns c ON d.campaign_id = c.id
@@ -140,6 +145,7 @@ router.get('/my', auth(), async (req, res, next) => {
     res.json({ data: result.rows });
   } catch (e) { next(e); }
 });
+
 
 // GET /api/donations/receipt/:id - Single donation receipt
 router.get('/receipt/:id', auth(), async (req, res, next) => {
@@ -193,14 +199,13 @@ router.post('/manual', auth('donor'), upload.single('proof'), async (req, res, n
     // Generate unique bank reference
     const bankRef = `DON-${Date.now().toString().slice(-8)}`;
 
-    const result = await client.query(`
-      INSERT INTO donations (
-        donor_id, campaign_id, amount, payment_method, status,
-        bank_reference, proof_of_payment_url, donor_note
-      ) VALUES ($1, $2, $3, 'BANK_TRANSFER', 'PENDING', $4, $5, $6)
-      RETURNING *
-    `, [req.user.id, value.campaign_id, value.amount, bankRef, req.file.path, value.donor_note]);
-
+const result = await client.query(`
+  INSERT INTO donations (
+    user_id, campaign_id, amount, payment_method, status,
+    bank_reference, proof_of_payment_url, donor_note
+  ) VALUES ($1, $2, $3, 'BANK_TRANSFER', 'PENDING', $4, $5, $6)
+  RETURNING *
+`, [req.user.id, value.campaign_id, value.amount, bankRef, req.file.path, value.donor_note]);
     await client.query('COMMIT');
     res.json({
       data: result.rows[0],
@@ -240,6 +245,7 @@ router.get('/ngo', auth('ngo'), async (req, res, next) => {
 });
 
 // PATCH /api/admin/donations/:id/verify - Admin approves/rejects
+// PATCH /api/admin/donations/:id/verify - Admin approves/rejects + generates receipt
 router.patch('/admin/donations/:id/verify', auth('admin'), async (req, res, next) => {
   const { status, rejection_reason } = req.body;
   const client = await db.connect();
@@ -249,30 +255,95 @@ router.patch('/admin/donations/:id/verify', auth('admin'), async (req, res, next
 
     await client.query('BEGIN');
 
-    const donation = await client.query('SELECT * FROM donations WHERE id = $1 AND status = \'PENDING\' FOR UPDATE', [req.params.id]);
-    if (!donation.rows[0]) throw new Error('Donation not found or already processed');
+    // 1. Get donation with full details
+    const donationQuery = await client.query(`
+      SELECT d.*, c.title as campaign_title, c.ngo_id, n.org_name, n.id as ngo_profile_id,
+             u.name as donor_name, u.email as donor_email
+      FROM donations d
+      JOIN campaigns c ON d.campaign_id = c.id
+      JOIN ngo_profiles n ON c.ngo_id = n.id
+      JOIN users u ON d.donor_id = u.id
+      WHERE d.id = $1 AND d.status = 'PENDING'
+      FOR UPDATE
+    `, [req.params.id]);
 
+    if (!donationQuery.rows[0]) throw new Error('Donation not found or already processed');
+    const donation = donationQuery.rows[0];
+
+    // 2. Update donation status
     const result = await client.query(`
-      UPDATE donations SET status = $1, verified_by = $2, verified_at = NOW(), rejection_reason = $3
-      WHERE id = $4 RETURNING *
-    `, [status, req.user.id, rejection_reason, req.params.id]);
+      UPDATE donations
+      SET status = $1, verified_by = $2, verified_at = NOW(), rejection_reason = $3
+      WHERE id = $4
+      RETURNING *
+    `, [status, req.user.id, rejection_reason || null, req.params.id]);
 
-    // If VERIFIED, add to NGO wallet
+    let receiptUrl = null;
+
+    // 3. If VERIFIED: add to NGO wallet + generate receipt
     if (status === 'VERIFIED') {
-      const campaign = await client.query('SELECT ngo_id FROM campaigns WHERE id = $1', [donation.rows[0].campaign_id]);
+      // Add to wallet
       await client.query(`
-        UPDATE ngo_wallets SET balance = balance + $1, total_received = total_received + $1, updated_at = NOW()
-        WHERE ngo_id = $2
-      `, [donation.rows[0].amount, campaign.rows[0].ngo_id]);
+        INSERT INTO ngo_wallets (ngo_id, balance, total_received)
+        VALUES ($1, $2, $2)
+        ON CONFLICT (ngo_id) DO UPDATE SET
+          balance = ngo_wallets.balance + $2,
+          total_received = ngo_wallets.total_received + $2,
+          updated_at = NOW()
+      `, [donation.ngo_profile_id, donation.amount]);
 
+      // Update campaign raised amount
       await client.query(`
-        UPDATE campaigns SET raised_amount = raised_amount + $1, updated_at = NOW()
+        UPDATE campaigns
+        SET raised_amount = raised_amount + $1,
+            status = CASE WHEN raised_amount + $1 >= target_amount THEN 'COMPLETED' ELSE status END,
+            updated_at = NOW()
         WHERE id = $2
-      `, [donation.rows[0].amount, donation.rows[0].campaign_id]);
+      `, [donation.amount, donation.campaign_id]);
+
+      // Generate PDF receipt
+      const fullPath = await generateDonationReceipt({
+       ...donation,
+        verified_at: new Date(),
+        payment_method: donation.payment_method || 'BANK_TRANSFER',
+        transaction_id: donation.bank_reference || donation.transaction_ref
+      });
+
+      receiptUrl = fullPath;
+
+      // Save receipt URL
+      await client.query(
+        'UPDATE donations SET receipt_url = $1, receipt_sent_at = NOW() WHERE id = $2',
+        [receiptUrl, req.params.id]
+      );
+
+      // Email receipt if donor has email
+      if (donation.donor_email) {
+        try {
+          const absolutePath = path.join(__dirname, '../../', receiptUrl);
+          await sendReceiptEmail(donation.donor_email, absolutePath, donation);
+        } catch (mailErr) {
+          console.error('Failed to email receipt:', mailErr.message);
+          // Don't fail the whole request if email fails
+        }
+      }
     }
 
     await client.query('COMMIT');
-    res.json({ data: result.rows[0] });
+
+    // After admin verifies donation, inside PATCH /:id/verify
+await createNotification(
+  donation.donor_id,
+  'Donation Verified',
+  `Your PKR ${donation.amount} donation to ${campaign.title} is verified.`,
+  'donation_verified',
+  { donation_id: donation.id, campaign_id: donation.campaign_id }
+);
+    res.json({
+      data: result.rows[0],
+      receipt_url: receiptUrl,
+      message: status === 'VERIFIED'? 'Donation verified & receipt sent' : 'Donation rejected'
+    });
   } catch (e) {
     await client.query('ROLLBACK');
     res.status(400).json({ error: e.message });
