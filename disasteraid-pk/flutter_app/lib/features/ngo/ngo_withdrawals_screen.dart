@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/app_formatters.dart';
 import 'models/withdrawal.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
@@ -54,7 +55,7 @@ class _NgoWithdrawalsScreenState extends State<NgoWithdrawalsScreen> {
   Future<void> _showWithdrawDialog() async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => _WithdrawDialog(balance: double.parse(_wallet?['balance'].toString()?? '0')),
+      builder: (context) => _WithdrawDialog(balance: AppFormatters.pkrInt(_wallet?['balance'])),
     );
     if (result == true) _loadData();
   }
@@ -227,7 +228,7 @@ class _NgoWithdrawalsScreenState extends State<NgoWithdrawalsScreen> {
     if (_loading) return _buildShimmer();
     if (_error!= null) return ErrorState(message: _error!, onRetry: _loadData);
 
-    final balance = double.parse(_wallet?['balance'].toString()?? '0');
+    final balance = AppFormatters.pkrInt(_wallet?['balance']);
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -489,7 +490,7 @@ class _WithdrawalCard extends StatelessWidget {
 }
 
 class _WithdrawDialog extends StatefulWidget {
-  final double balance;
+  final int balance;
   const _WithdrawDialog({required this.balance});
 
   @override
@@ -548,7 +549,7 @@ class _WithdrawDialogState extends State<_WithdrawDialog> {
 
     try {
       await _api.dio.post('/ngos/withdrawals', data: {
-        'amount': double.parse(_amountController.text),
+        'amount': AppFormatters.pkrInt(_amountController.text),
         'bank_name': _bankController.text.trim(),
         'account_title': _titleController.text.trim(),
         'account_number': _accountController.text.trim(),
@@ -621,8 +622,8 @@ class _WithdrawDialogState extends State<_WithdrawDialog> {
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'Required';
-                      final amt = double.tryParse(v);
-                      if (amt == null || amt < 100) return 'Minimum 100 PKR';
+                      final amt = AppFormatters.pkrInt(v);
+                      if (amt < 100) return 'Minimum 100 PKR';
                       if (amt > widget.balance) return 'Insufficient balance';
                       return null;
                     },

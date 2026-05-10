@@ -29,12 +29,13 @@ class _NgoDashboardState extends State<NgoDashboard> {
   Future<void> _checkNgoStatus() async {
     try {
       final res = await ApiClient().dio.get('/ngos/me');
+      if (!mounted) return;
       setState(() {
-        _ngoProfile = res.data;
+        _ngoProfile = Map<String, dynamic>.from(res.data as Map? ?? {});
         _loading = false;
       });
     } catch (e) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 

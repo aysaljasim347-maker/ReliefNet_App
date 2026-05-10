@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
-import '../../core/api/api_client.dart';
+import '../../core/utils/app_formatters.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,6 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loading = false;
   String? _error;
   bool _obscure = true;
+  bool _canSubmit = false;
 
   final Map<String, Map<String, dynamic>> _roles = {
     'donor': {'label': 'Donor', 'icon': Icons.favorite, 'desc': 'Support campaigns with PKR'},
@@ -28,12 +29,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
   };
 
   @override
+  void initState() {
+    super.initState();
+    for (final controller in [_nameController, _emailController, _phoneController, _passwordController]) {
+      controller.addListener(_updateCanSubmit);
+    }
+  }
+
+  @override
   void dispose() {
+    for (final controller in [_nameController, _emailController, _phoneController, _passwordController]) {
+      controller.removeListener(_updateCanSubmit);
+    }
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _updateCanSubmit() {
+    final nameOk = _nameController.text.trim().length >= 2;
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    final emailOk = email.isEmpty || RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(email);
+    final phoneOk = phone.isEmpty || AppFormatters.isValidPakistanPhone(phone);
+    final contactOk = email.isNotEmpty || phone.isNotEmpty;
+    final next = nameOk && emailOk && phoneOk && contactOk && _passwordController.text.length >= 6;
+    if (next != _canSubmit) setState(() => _canSubmit = next);
   }
 
   Future<void> _register() async {
@@ -74,12 +97,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(title: const Text('Create Account')),
       body: Form(
         key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(16),
           children: [
             Text('Join DisasterAid PK', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text('Select your role to get started', style: TextStyle(color: Colors.grey[600])),
+            Text(
+              'Select your role to get started',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
             const SizedBox(height: 24),
             TextFormField(
               controller: _nameController,
@@ -88,6 +115,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 prefixIcon: const Icon(Icons.person_outline),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
+              textInputAction: TextInputAction.next,
               validator: (v) => v!.trim().length < 2? 'Enter your name' : null,
             ),
             const SizedBox(height: 16),
@@ -101,11 +129,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
               keyboardType: TextInputType.emailAddress,
               validator: (v) {
                 if (v!.isEmpty && _phoneController.text.isEmpty) return null;
-                if (v.isNotEmpty &&!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) {
+                if (v.isNotEmpty &&!RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(v)) {
                   return 'Invalid email';
                 }
                 return null;
               },
+              textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -119,11 +148,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
               keyboardType: TextInputType.phone,
               validator: (v) {
                 if (v!.isEmpty && _emailController.text.isEmpty) return null;
-                if (v.isNotEmpty &&!RegExp(r'^03\d{9}$').hasMatch(v)) {
+                if (v.isNotEmpty && !AppFormatters.isValidPakistanPhone(v)) {
                   return 'Format: 03XXXXXXXXX';
                 }
                 return null;
               },
+              textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -133,11 +163,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   icon: Icon(_obscure? Icons.visibility_off : Icons.visibility),
+                  tooltip: _obscure ? 'Show password' : 'Hide password',
                   onPressed: () => setState(() => _obscure =!_obscure),
                 ),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               obscureText: _obscure,
+              textInputAction: TextInputAction.done,
               validator: (v) => v!.length < 6? 'Min 6 characters' : null,
             ),
             const SizedBox(height: 24),
@@ -150,7 +182,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 side: BorderSide(
                   color: _role == entry.key
                  ? Theme.of(context).colorScheme.primary
-                    : Colors.grey[300]!,
+                    : Theme.of(context).colorScheme.outlineVariant,
                   width: _role == entry.key? 2 : 1,
                 ),
               ),
@@ -171,19 +203,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red[50],
+                  color: Theme.of(context).colorScheme.errorContainer,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(children: [
-                  Icon(Icons.error_outline, color: Colors.red[700], size: 20),
+                  Icon(Icons.error_outline, color: Theme.of(context).colorScheme.onErrorContainer, size: 20),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(_error!, style: TextStyle(color: Colors.red[700]))),
+                  Expanded(child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer))),
                 ]),
               ),
             ],
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _loading? null : _register,
+              onPressed: _loading || !_canSubmit ? null : _register,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.all(16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

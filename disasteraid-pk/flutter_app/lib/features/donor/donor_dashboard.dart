@@ -3,6 +3,8 @@ import 'package:disasteraid_pk/features/maps/campaign_map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/utils/app_formatters.dart';
+import '../settings/settings_screen.dart';
 import '../campaigns/screens/campaign_list_screen.dart';
 import '../campaigns/services/campaign_service.dart';
 
@@ -23,8 +25,6 @@ class _DonorDashboardState extends State<DonorDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -365,7 +365,7 @@ class ProfileTab extends StatelessWidget {
                   radius: 48,
                   backgroundColor: cs.primaryContainer,
                   child: Text(
-                    user?['name']?[0].toUpperCase()?? 'D',
+                    AppFormatters.initial(user?['name'], 'D'),
                     style: tt.headlineLarge?.copyWith(
                       color: cs.onPrimaryContainer,
                       fontWeight: FontWeight.bold,
@@ -409,13 +409,12 @@ class ProfileTab extends StatelessWidget {
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.notifications_outlined),
-                  title: const Text('Notifications'),
+                  title: const Text('Settings'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Coming soon')),
-                    );
-                  },
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  ),
                 ),
                 const Divider(height: 1),
                 ListTile(

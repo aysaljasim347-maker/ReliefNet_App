@@ -147,7 +147,7 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
   bool _loading = true;
   String? _error;
   final _api = ApiClient();
-  final _currency = NumberFormat.compact(locale: 'en_PK');
+  final _currency = NumberFormat.currency(locale: 'en_PK', symbol: 'PKR ', decimalDigits: 0);
 
   @override
   void initState() {
@@ -250,13 +250,13 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
               ),
               _StatCard(
                 title: 'Total Raised',
-                value: 'PKR ${_currency.format(_parseAmount(donations['total_amount']))}',
+                value: _currency.format(_parseAmount(donations['total_amount'])),
                 icon: Icons.volunteer_activism_outlined,
                 color: Colors.purple,
               ),
               _StatCard(
                 title: 'Total Target',
-                value: 'PKR ${_currency.format(_parseAmount(campaigns['total_target']))}',
+                value: _currency.format(_parseAmount(campaigns['total_target'])),
                 icon: Icons.flag_outlined,
                 color: Colors.indigo,
               ),

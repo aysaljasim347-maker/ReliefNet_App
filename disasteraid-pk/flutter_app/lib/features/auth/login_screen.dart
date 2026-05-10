@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
-import '../../core/api/api_client.dart';
+import '../../core/utils/app_formatters.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,12 +16,31 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _error;
   bool _obscure = true;
+  bool _canSubmit = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_updateCanSubmit);
+    _passwordController.addListener(_updateCanSubmit);
+  }
 
   @override
   void dispose() {
+    _emailController.removeListener(_updateCanSubmit);
+    _passwordController.removeListener(_updateCanSubmit);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _updateCanSubmit() {
+    final id = _emailController.text.trim();
+    final password = _passwordController.text;
+    final isEmail = RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(id);
+    final isPhone = AppFormatters.isValidPakistanPhone(id);
+    final next = (isEmail || isPhone) && password.length >= 6;
+    if (next != _canSubmit) setState(() => _canSubmit = next);
   }
 
   Future<void> _login() async {
@@ -38,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString()); // ApiException.toString() returns clean message
+        setState(() => _error = e.toString());
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -51,9 +70,10 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             child: Form(
               key: _formKey,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -73,7 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'Transparent aid for Pakistan',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
@@ -85,7 +107,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))
                     ),
                     keyboardType: TextInputType.emailAddress,
-                    validator: (v) => v!.isEmpty? 'Required' : null,
+                    textInputAction: TextInputAction.next,
+                    validator: (v) {
+                      final value = v?.trim() ?? '';
+                      if (value.isEmpty) return 'Email or phone required';
+                      final isEmail = RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(value);
+                      if (!isEmail && !AppFormatters.isValidPakistanPhone(value)) {
+                        return 'Use email or 03XXXXXXXXX';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -95,31 +126,36 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(_obscure? Icons.visibility_off : Icons.visibility),
+                        tooltip: _obscure ? 'Show password' : 'Hide password',
                         onPressed: () => setState(() => _obscure =!_obscure),
                       ),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))
                     ),
                     obscureText: _obscure,
+                    textInputAction: TextInputAction.done,
                     validator: (v) => v!.length < 6? 'Min 6 characters' : null,
+                    onFieldSubmitted: (_) {
+                      if (_canSubmit && !_loading) _login();
+                    },
                   ),
                   if (_error!= null)...[
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red[50],
+                        color: Theme.of(context).colorScheme.errorContainer,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(children: [
-                        Icon(Icons.error_outline, color: Colors.red[700], size: 20),
+                        Icon(Icons.error_outline, color: Theme.of(context).colorScheme.onErrorContainer, size: 20),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(_error!, style: TextStyle(color: Colors.red[700]))),
+                        Expanded(child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer))),
                       ]),
                     ),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _loading? null : _login,
+                    onPressed: _loading || !_canSubmit ? null : _login,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.all(16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

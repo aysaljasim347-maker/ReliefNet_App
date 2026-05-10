@@ -1,17 +1,20 @@
+import '../../../core/utils/app_formatters.dart';
+
 class Campaign {
   final int id;
   final int ngoId;
   final String title;
   final String description;
   final String category;
-  final double targetAmount;
-  final double raisedAmount;
+  final int targetAmount;
+  final int raisedAmount;
   final String? imageUrl;
   final String? location;
   final String status;
   final String? orgName;
   final DateTime createdAt;
   final DateTime? endDate;
+  final int donorCount;
   
   // CHANGED: Platform bank details instead of NGO bank
   final String? platformBankName;
@@ -33,6 +36,7 @@ class Campaign {
     this.orgName,
     required this.createdAt,
     this.endDate,
+    this.donorCount = 0,
     this.platformBankName,
     this.platformAccountTitle,
     this.platformAccountNumber,
@@ -41,24 +45,25 @@ class Campaign {
 
   factory Campaign.fromJson(Map<String, dynamic> json) {
     return Campaign(
-      id: json['id'] is int? json['id'] : int.parse(json['id'].toString()),
-      ngoId: json['ngo_id'] is int? json['ngo_id'] : int.parse(json['ngo_id'].toString()),
-      title: json['title']?? '',
-      description: json['description']?? '',
-      category: json['category']?? 'general',
-      targetAmount: double.tryParse(json['target_amount']?.toString()?? '0')?? 0.0,
-      raisedAmount: double.tryParse(json['raised_amount']?.toString()?? '0')?? 0.0,
-      imageUrl: json['image_url'],
-      location: json['location'],
-      status: json['status']?? 'ACTIVE',
-      orgName: json['org_name'],
-      createdAt: DateTime.parse(json['created_at']),
-      endDate: json['end_date']!= null? DateTime.parse(json['end_date']) : null,
+      id: _intValue(json['id']),
+      ngoId: _intValue(json['ngo_id']),
+      title: json['title']?.toString() ?? 'Untitled campaign',
+      description: json['description']?.toString() ?? '',
+      category: json['category']?.toString() ?? 'OTHER',
+      targetAmount: AppFormatters.pkrInt(json['target_amount']),
+      raisedAmount: AppFormatters.pkrInt(json['raised_amount']),
+      imageUrl: _nullableString(json['image_url']),
+      location: _nullableString(json['location']),
+      status: json['status']?.toString() ?? 'ACTIVE',
+      orgName: _nullableString(json['org_name']),
+      createdAt: AppFormatters.parseDate(json['created_at']),
+      endDate: AppFormatters.tryParseDate(json['end_date']),
+      donorCount: _intValue(json['donor_count']),
       // CHANGED
-      platformBankName: json['platform_bank_name'],
-      platformAccountTitle: json['platform_account_title'],
-      platformAccountNumber: json['platform_account_number'],
-      platformIban: json['platform_iban'],
+      platformBankName: _nullableString(json['platform_bank_name']),
+      platformAccountTitle: _nullableString(json['platform_account_title']),
+      platformAccountNumber: _nullableString(json['platform_account_number']),
+      platformIban: _nullableString(json['platform_iban']),
     );
   }
 
@@ -77,6 +82,7 @@ class Campaign {
       'org_name': orgName,
       'created_at': createdAt.toIso8601String(),
       'end_date': endDate?.toIso8601String(),
+      'donor_count': donorCount,
       'platform_bank_name': platformBankName,
       'platform_account_title': platformAccountTitle,
       'platform_account_number': platformAccountNumber,
@@ -86,10 +92,24 @@ class Campaign {
 
   double get progress => targetAmount > 0? (raisedAmount / targetAmount).clamp(0.0, 1.0) : 0.0;
   int get percentRaised => (progress * 100).toInt();
+  bool get isOpenForDonations =>
+      status == 'ACTIVE' && (endDate == null || endDate!.isAfter(DateTime.now()));
 
   int? get daysLeft {
     if (endDate == null) return null;
     final diff = endDate!.difference(DateTime.now()).inDays;
     return diff < 0? 0 : diff;
   }
+}
+
+int _intValue(dynamic value) {
+  if (value == null) return 0;
+  if (value is int) return value;
+  if (value is num) return value.round();
+  return int.tryParse(value.toString()) ?? 0;
+}
+
+String? _nullableString(dynamic value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
 }

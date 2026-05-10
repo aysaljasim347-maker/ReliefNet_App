@@ -17,7 +17,7 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
   String _filter = 'ALL';
   String? _error;
   final _api = ApiClient();
-  final _currency = NumberFormat.compact(locale: 'en_PK');
+  final _currency = NumberFormat.currency(locale: 'en_PK', symbol: 'PKR ', decimalDigits: 0);
 
   @override
   void initState() {
@@ -245,7 +245,7 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'PKR ${_currency.format(raised)} / ${_currency.format(target)}',
+                            '${_currency.format(raised)} / ${_currency.format(target)}',
                             style: tt.labelSmall?.copyWith(fontWeight: FontWeight.w600),
                           ),
                           Text(
