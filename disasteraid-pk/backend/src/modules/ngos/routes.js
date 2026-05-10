@@ -28,13 +28,13 @@ router.get('/', async (req, res, next) => {
 router.post('/onboard', auth('ngo'), upload.array('docs', 5), async (req, res, next) => {
   try {
     const { error, value } = onboardSchema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
+    if (error) return res.fail(error.details[0].message, 400); // was res.fail
 
     const existing = await db.query('SELECT status FROM ngo_profiles WHERE user_id=$1', [req.user.id]);
-    if (existing.rows[0]?.status === 'PENDING') return res.error('Already submitted for review', 400);
-    if (existing.rows[0]?.status === 'APPROVED') return res.error('Already verified', 400);
+    if (existing.rows[0]?.status === 'PENDING') return res.fail('Already submitted for review', 400); // was res.fail
+    if (existing.rows[0]?.status === 'APPROVED') return res.fail('Already verified', 400); // was res.fail
 
-    if (!req.files || req.files.length === 0) return res.error('At least 1 document required', 400);
+    if (!req.files || req.files.length === 0) return res.fail('At least 1 document required', 400); // was res.fail
 
     const urls = req.files.map(f => f.path);
     const { org_name, registration_number, address, contact_person, mission, email, phone } = value;
@@ -77,7 +77,7 @@ router.get('/profile', auth('ngo'), async (req, res, next) => {
 router.get('/dashboard/stats', auth('ngo'), async (req, res, next) => {
   try {
     const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
-    if (!ngo.rows[0]) return res.error('NGO profile not found', 403);
+    if (!ngo.rows[0]) return res.fail('NGO profile not found', 403);
     const ngoId = ngo.rows[0].id;
 
     const result = await db.query(`
@@ -111,7 +111,7 @@ router.get('/dashboard/chart', auth('ngo'), async (req, res, next) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
-    if (!ngo.rows[0]) return res.error('NGO profile not found', 403);
+    if (!ngo.rows[0]) return res.fail('NGO profile not found', 403);
 
     const result = await db.query(`
       SELECT
@@ -135,7 +135,7 @@ router.get('/dashboard/chart', auth('ngo'), async (req, res, next) => {
 router.get('/dashboard/recent', auth('ngo'), async (req, res, next) => {
   try {
     const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
-    if (!ngo.rows[0]) return res.error('NGO profile not found', 403);
+    if (!ngo.rows[0]) return res.fail('NGO profile not found', 403);
 
     const result = await db.query(`
       SELECT d.id, d.amount, d.verified_at, d.donor_name, c.title as campaign_title
@@ -147,6 +147,36 @@ router.get('/dashboard/recent', auth('ngo'), async (req, res, next) => {
     `, [ngo.rows[0].id]);
 
     res.success(result.rows);
+  } catch (e) { next(e); }
+});
+
+// PUT /api/ngos/bank-details - NGO adds bank info after approval
+router.put('/bank-details', auth('ngo'), async (req, res, next) => {
+  try {
+    const { error, value } = Joi.object({
+      bank_name: Joi.string().min(2).required(),
+      bank_account_title: Joi.string().min(2).required(),
+      bank_account_number: Joi.string().min(5).required(),
+      bank_iban: Joi.string().length(24).pattern(/^PK/).required(),
+    }).validate(req.body);
+
+    if (error) return res.fail(error.details[0].message, 400);
+
+    const { bank_name, bank_account_title, bank_account_number, bank_iban } = value;
+
+    const result = await db.query(
+      `UPDATE ngo_profiles
+       SET bank_name=$1, bank_account_title=$2, bank_account_number=$3, bank_iban=$4, updated_at=NOW()
+       WHERE user_id=$5 AND status='APPROVED'
+       RETURNING *`,
+      [bank_name, bank_account_title, bank_account_number, bank_iban, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.fail('NGO not approved or profile not found', 403);
+    }
+
+    res.success({ message: 'Bank details saved', data: result.rows[0] });
   } catch (e) { next(e); }
 });
 

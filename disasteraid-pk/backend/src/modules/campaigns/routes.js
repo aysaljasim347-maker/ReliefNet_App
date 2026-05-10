@@ -4,7 +4,7 @@ const db = require('../../config/db');
 const auth = require('../../middleware/auth');
 const upload = require('../../utils/upload');
 const Joi = require('joi');
-// const cloudinary = require('../../utils/upload');
+const cloudinary = require('../../utils/upload');
 const fs = require('fs');
 
 const campaignSchema = Joi.object({
@@ -68,7 +68,7 @@ router.get('/', async (req, res, next) => {
       FROM campaigns c
       JOIN ngo_profiles n ON c.ngo_id = n.id
       JOIN users u ON n.user_id = u.id
-      LEFT JOIN donations d ON d.campaign_id = c.id AND d.status = 'completed'
+      LEFT JOIN donations d ON d.campaign_id = c.id AND d.status = 'VERIFIED'
       WHERE 1=1
     `;
     const params = [];
@@ -93,7 +93,7 @@ router.get('/my', auth('ngo'), async (req, res, next) => {
     const result = await db.query(`
       SELECT c.*, COUNT(DISTINCT d.user_id) as donor_count
       FROM campaigns c
-      LEFT JOIN donations d ON d.campaign_id = c.id AND d.status = 'completed'
+      LEFT JOIN donations d ON d.campaign_id = c.id AND d.status = 'VERIFIED'
       WHERE c.ngo_id = $1
       GROUP BY c.id
       ORDER BY c.created_at DESC
@@ -160,7 +160,7 @@ router.get('/nearby', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/campaigns/:id - Must be after /map and /nearby
+// GET /api/campaigns/:id - Campaign detail
 router.get('/:id', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -174,16 +174,25 @@ router.get('/:id', async (req, res, next) => {
       FROM campaigns c
       JOIN ngo_profiles n ON c.ngo_id = n.id
       JOIN users u ON n.user_id = u.id
-      LEFT JOIN donations d ON d.campaign_id = c.id AND d.status = 'completed'
+      LEFT JOIN donations d ON d.campaign_id = c.id AND d.status = 'VERIFIED'
       WHERE c.id = $1
       GROUP BY c.id, n.id, u.id
     `, [req.params.id]);
 
     if (!result.rows[0]) return res.fail('Campaign not found', 404);
-    res.success(result.rows[0]);
+    
+    // Add platform bank details from .env
+    const campaign = {
+      ...result.rows[0],
+      platform_bank_name: process.env.PLATFORM_BANK_NAME,
+      platform_account_title: process.env.PLATFORM_ACCOUNT_TITLE,
+      platform_account_number: process.env.PLATFORM_ACCOUNT_NUMBER,
+      platform_iban: process.env.PLATFORM_IBAN,
+    };
+    
+    res.success(campaign);
   } catch (e) { next(e); }
 });
-
 // PUT /api/campaigns/:id - NGO edits own campaign
 router.put('/:id', auth('ngo'), upload.single('image'), async (req, res, next) => {
   try {

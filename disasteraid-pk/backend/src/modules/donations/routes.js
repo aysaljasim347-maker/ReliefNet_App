@@ -20,10 +20,10 @@ const donationSchema = Joi.object({
   is_anonymous: Joi.boolean().default(false)
 });
 
-// POST /api/donations - Direct donation
+// POST /api/donations - Direct donation (card/jazzcash)
 router.post('/', auth(), async (req, res, next) => {
   const { error, value } = donationSchema.validate(req.body);
-  if (error) return res.error(error.details[0].message, 400);
+  if (error) return res.fail(error.details[0].message, 400);
 
   let { campaign_id, amount, payment_method, donor_name, donor_email, transaction_id, is_anonymous } = value;
 
@@ -61,7 +61,7 @@ router.post('/', auth(), async (req, res, next) => {
 
     const donation = await client.query(
       `INSERT INTO donations (user_id, campaign_id, amount, payment_method, status, transaction_ref, donor_name, donor_email, is_anonymous)
-       VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8) RETURNING *`,
+       VALUES ($1, $2, $3, $4, 'VERIFIED', $5, $6, $7, $8) RETURNING *`,
       [req.user.id, campaign_id, amount, payment_method, transaction_id, finalDonorName, finalDonorEmail, is_anonymous]
     );
 
@@ -121,7 +121,7 @@ router.get('/my', auth(), async (req, res, next) => {
   try {
     const result = await db.query(`
       SELECT d.id, d.amount, d.status, d.created_at, d.verified_at, d.receipt_url,
-             d.transaction_ref, d.payment_method,
+             d.transaction_ref, d.payment_method, d.rejection_reason,
              c.title as campaign_title, c.image_url, c.status as campaign_status,
              n.org_name, n.id as ngo_id
       FROM donations d
@@ -149,12 +149,12 @@ router.get('/receipt/:id', auth(), async (req, res, next) => {
       WHERE d.id = $1 AND (d.user_id = $2 OR $3 = 'admin')
     `, [req.params.id, req.user.id, req.user.role]);
 
-    if (!result.rows[0]) return res.error('Receipt not found', 404);
+    if (!result.rows[0]) return res.fail('Receipt not found', 404);
     res.success(result.rows[0]);
   } catch (e) { next(e); }
 });
 
-// POST /api/donations/manual
+// POST /api/donations/manual - UPDATED: Returns PLATFORM bank details
 router.post('/manual', auth('donor'), upload.single('proof'), async (req, res, next) => {
   const client = await db.connect();
   try {
@@ -164,20 +164,22 @@ router.post('/manual', auth('donor'), upload.single('proof'), async (req, res, n
       donor_note: Joi.string().max(200).allow('', null),
     });
     const { error, value } = schema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
-    if (!req.file) return res.error('Payment proof image required', 400);
+    if (error) return res.fail(error.details[0].message, 400);
+    if (!req.file) return res.fail('Payment proof image required', 400);
 
     await client.query('BEGIN');
 
     const campaign = await client.query(`
-      SELECT c.id, c.ngo_id, n.org_name, n.bank_account_title, n.bank_account_number, n.bank_iban
+      SELECT c.id, c.title, c.ngo_id, n.org_name
       FROM campaigns c
       JOIN ngo_profiles n ON c.ngo_id = n.id
       WHERE c.id = $1 AND c.status = 'ACTIVE'
     `, [value.campaign_id]);
 
     if (!campaign.rows[0]) throw new Error('Campaign not found or inactive');
-    if (!campaign.rows[0].bank_iban) throw new Error('NGO has not added bank details yet');
+
+    // Check platform bank details exist in.env
+    if (!process.env.PLATFORM_IBAN) throw new Error('Platform bank details not configured');
 
     const bankRef = `DON-${Date.now().toString().slice(-8)}`;
 
@@ -191,15 +193,16 @@ router.post('/manual', auth('donor'), upload.single('proof'), async (req, res, n
 
     await client.query('COMMIT');
 
-    // FIXED: Return flat bank_details object, not nested
+    // Return PLATFORM bank details, not NGO bank
     res.success({
-      bank_name: campaign.rows[0].bank_name,
-      account_title: campaign.rows[0].bank_account_title,
-      account_number: campaign.rows[0].bank_account_number,
-      iban: campaign.rows[0].bank_iban,
+      platform_bank_name: process.env.PLATFORM_BANK_NAME,
+      platform_account_title: process.env.PLATFORM_ACCOUNT_TITLE,
+      platform_account_number: process.env.PLATFORM_ACCOUNT_NUMBER,
+      platform_iban: process.env.PLATFORM_IBAN,
       reference: bankRef,
       amount: value.amount,
-      donation_id: result.rows[0].id
+      donation_id: result.rows[0].id,
+      campaign_title: campaign.rows[0].title
     }, 201);
   } catch (e) {
     await client.query('ROLLBACK');
@@ -209,26 +212,45 @@ router.post('/manual', auth('donor'), upload.single('proof'), async (req, res, n
   }
 });
 
-// GET /api/donations/ngo
+// GET /api/donations/ngo - NGO sees donations to their campaigns
 router.get('/ngo', auth('ngo'), async (req, res, next) => {
   try {
     const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
-    if (!ngo.rows[0]) return res.error('NGO profile not found', 403);
+    if (!ngo.rows[0]) return res.fail('NGO profile not found', 403);
 
     const result = await db.query(`
       SELECT d.*, c.title as campaign_title, u.name as donor_name, u.email as donor_email
       FROM donations d
       JOIN campaigns c ON d.campaign_id = c.id
       JOIN users u ON d.user_id = u.id
-      WHERE c.ngo_id = $1 AND d.payment_method = 'BANK_TRANSFER'
+      WHERE c.ngo_id = $1
       ORDER BY d.created_at DESC LIMIT 100
     `, [ngo.rows[0].id]);
     res.success(result.rows);
   } catch (e) { next(e); }
 });
 
-// PATCH /api/admin/donations/:id/verify
-router.patch('/admin/donations/:id/verify', auth('admin'), async (req, res, next) => {
+// GET /api/donations/pending - ADDED: Admin sees all pending donations
+router.get('/pending', auth('admin'), async (req, res, next) => {
+  try {
+    const result = await db.query(`
+      SELECT d.id, d.amount, d.status, d.created_at, d.proof_of_payment_url,
+             d.bank_reference, d.donor_note,
+             c.title as campaign_title, n.org_name,
+             u.name as donor_name, u.email as donor_email, u.phone as donor_phone
+      FROM donations d
+      JOIN campaigns c ON d.campaign_id = c.id
+      JOIN ngo_profiles n ON c.ngo_id = n.id
+      JOIN users u ON d.user_id = u.id
+      WHERE d.status = 'PENDING' AND d.payment_method = 'BANK_TRANSFER'
+      ORDER BY d.created_at ASC
+    `);
+    res.success(result.rows);
+  } catch (e) { next(e); }
+});
+
+// PATCH /api/admin/donations/:id/verify - Admin verifies donation
+router.patch('/:id/verify', auth('admin'), async (req, res, next) => {
   const { status, rejection_reason } = req.body;
   const client = await db.connect();
 
@@ -261,6 +283,7 @@ router.patch('/admin/donations/:id/verify', auth('admin'), async (req, res, next
     let receiptUrl = null;
 
     if (status === 'VERIFIED') {
+      // Update NGO wallet
       await client.query(`
         INSERT INTO ngo_wallets (ngo_id, balance, total_received)
         VALUES ($1, $2, $2)
@@ -270,6 +293,7 @@ router.patch('/admin/donations/:id/verify', auth('admin'), async (req, res, next
           updated_at = NOW()
       `, [donation.ngo_profile_id, donation.amount]);
 
+      // Update campaign raised_amount
       await client.query(`
         UPDATE campaigns
         SET raised_amount = raised_amount + $1,
@@ -278,8 +302,9 @@ router.patch('/admin/donations/:id/verify', auth('admin'), async (req, res, next
         WHERE id = $2
       `, [donation.amount, donation.campaign_id]);
 
+      // Generate receipt
       const fullPath = await generateDonationReceipt({
-       ...donation,
+      ...donation,
         verified_at: new Date(),
         payment_method: donation.payment_method || 'BANK_TRANSFER',
         transaction_id: donation.bank_reference || donation.transaction_ref
@@ -306,9 +331,11 @@ router.patch('/admin/donations/:id/verify', auth('admin'), async (req, res, next
 
     await createNotification(
       donation.donor_id,
-      'Donation Verified',
-      `Your PKR ${donation.amount} donation to ${donation.campaign_title} is verified.`,
-      'donation_verified',
+      status === 'VERIFIED'? 'Donation Verified' : 'Donation Rejected',
+      status === 'VERIFIED'
+       ? `Your PKR ${donation.amount} donation to ${donation.campaign_title} is verified.`
+        : `Your donation to ${donation.campaign_title} was rejected. Reason: ${rejection_reason}`,
+      status === 'VERIFIED'? 'donation_verified' : 'donation_rejected',
       { donation_id: donation.id, campaign_id: donation.campaign_id }
     );
 
