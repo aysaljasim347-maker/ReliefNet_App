@@ -17,7 +17,7 @@ const withdrawalSchema = Joi.object({
 // POST /api/ngos/withdrawals - Request withdrawal
 router.post('/withdrawals', auth('ngo'), async (req, res, next) => {
   const { error, value } = withdrawalSchema.validate(req.body);
-  if (error) return res.error(error.details[0].message, 400);
+  if (error) return res.fail(error.details[0].message, 400);
 
   const { amount, bank_name, account_title, account_number, iban } = value;
   const client = await db.connect();
@@ -28,7 +28,7 @@ router.post('/withdrawals', auth('ngo'), async (req, res, next) => {
     if (!ngo.rows[0]) throw new Error('NGO profile not found');
     if (ngo.rows[0].status!== 'APPROVED') throw new Error('NGO not approved yet');
 
-    const wallet = await client.query('SELECT balance FROM ngo_wallets WHERE ngo_id = $1', [ngo.rows[0].id]);
+    const wallet = await client.query('SELECT balance FROM ngo_wallets WHERE ngo_id = $1 FOR UPDATE', [ngo.rows[0].id]);
     if (!wallet.rows[0]) throw new Error('Wallet not found');
     if (parseFloat(wallet.rows[0].balance) < amount) throw new Error('Insufficient balance');
 

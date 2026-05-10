@@ -1,12 +1,11 @@
-import 'package:disasteraid_pk/features/campaigns/widgets/manual_donate_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:file_picker/file_picker.dart'; // ADDED
-import 'dart:io'; // ADDED
+import 'package:image_picker/image_picker.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/utils/app_formatters.dart';
 import '../services/campaign_service.dart';
 import '../models/campaign.dart';
 import '../../../shared/widgets/report_dialog.dart';
@@ -32,10 +31,12 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      loading = true;
-      error = null;
-    });
+    if (mounted) {
+      setState(() {
+        loading = true;
+        error = null;
+      });
+    }
     try {
       final c = await _service.getCampaign(widget.id);
       if (mounted) {
@@ -54,7 +55,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = 'Failed to load campaign';
+          error = ApiClient.messageFromError(e, 'Failed to load campaign');
           loading = false;
         });
       }
@@ -111,8 +112,11 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   }
 Future<void> _showManualDonateDialog() async {
   final amountController = TextEditingController();
-  File? proofFile;
+  final noteController = TextEditingController();
+  XFile? proofFile;
   bool loading = false;
+  String? amountError;
+  String? proofError;
 
   // Check if platform bank details exist
   if (campaign!.platformBankName == null) {
@@ -138,8 +142,7 @@ Future<void> _showManualDonateDialog() async {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  border: Border.all(color: Colors.blue[200]!),
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -154,74 +157,138 @@ Future<void> _showManualDonateDialog() async {
               ),
               const SizedBox(height: 8),
               Text('After transfer, upload screenshot below', 
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orange[800])),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
               TextFormField(
                 controller: amountController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Amount You Transferred *',
                   prefixText: 'PKR ',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   helperText: 'Enter exact amount sent',
+                  errorText: amountError,
                 ),
                 keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onChanged: (value) {
+                  final amount = AppFormatters.pkrInt(value);
+                  setState(() => amountError = amount == 0 || amount >= 100 ? null : 'Minimum PKR 100');
+                },
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                 onPressed: () async {
-                  final result = await FilePicker.platform.pickFiles(type: FileType.image);
-                  if (result!= null) {
-                    setState(() => proofFile = File(result.files.single.path!));
+                  final source = await showModalBottomSheet<ImageSource>(
+                    context: ctx,
+                    showDragHandle: true,
+                    builder: (sheetContext) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.photo_camera_outlined),
+                            title: const Text('Camera'),
+                            onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.photo_library_outlined),
+                            title: const Text('Gallery'),
+                            onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                  if (source != null) {
+                    final result = await ImagePicker().pickImage(
+                      source: source,
+                      imageQuality: 75,
+                      maxWidth: 1920,
+                    );
+                    if (result != null) {
+                      setState(() {
+                        proofFile = result;
+                        proofError = null;
+                      });
+                    }
                   }
                 },
                 icon: Icon(proofFile == null? Icons.upload_file : Icons.check_circle,
-                  color: proofFile == null? null : Colors.green),
+                  color: proofFile == null? null : Theme.of(context).colorScheme.primary),
                 label: Text(proofFile == null? 'Upload Transfer Screenshot *' : 'Screenshot Selected'),
               ),
+              if (proofError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(proofError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error)),
+                ),
               if (proofFile!= null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text('File: ${proofFile!.path.split('/').last}',
-                    style: const TextStyle(fontSize: 12, color: Colors.green)),
+                  child: Text(
+                    'File: ${proofFile!.name}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary),
+                  ),
                 ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: noteController,
+                decoration: const InputDecoration(
+                  labelText: 'Reference note (optional)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+                maxLength: 200,
+              ),
             ],
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
-            onPressed: loading || proofFile == null || amountController.text.isEmpty
+            onPressed: loading
               ? null
               : () async {
+                  final amount = AppFormatters.pkrInt(amountController.text);
+                  if (amount < 100) {
+                    setState(() => amountError = 'Minimum PKR 100');
+                    return;
+                  }
+                  if (proofFile == null) {
+                    setState(() => proofError = 'Upload proof required');
+                    return;
+                  }
                   setState(() => loading = true);
                   try {
                     final formData = FormData.fromMap({
                       'campaign_id': campaign!.id,
-                      'amount': amountController.text.trim(),
+                      'amount': amount.toString(),
+                      'donor_note': noteController.text.trim(),
                       'proof': await MultipartFile.fromFile(proofFile!.path),
                     });
                     await ApiClient().dio.post('/donations/manual', data: formData);
                     if (context.mounted) {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text('Donation submitted for verification'),
-                          backgroundColor: Colors.green,
+                          backgroundColor: Theme.of(context).colorScheme.primary,
                         ),
                       );
                       _load();
                     }
                   } on DioException catch (e) {
                     if (context.mounted) {
+                      final msg = ApiClient.messageFromError(e, 'Failed to submit donation');
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.response?.data['error']?? 'Failed to submit')),
+                        SnackBar(content: Text(msg)),
                       );
                     }
                   }
-                  setState(() => loading = false);
+                  if (ctx.mounted) setState(() => loading = false);
                 },
             child: loading
               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
@@ -263,7 +330,7 @@ Future<void> _showManualDonateDialog() async {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _buildBody(),
-      floatingActionButton:!loading && campaign!= null && campaign!.status == 'ACTIVE'
+      floatingActionButton: !loading && campaign != null && campaign!.isOpenForDonations
         ? FloatingActionButton.extended(
               onPressed: _showDonateDialog,
               icon: const Icon(Icons.favorite),
@@ -358,6 +425,17 @@ Future<void> _showManualDonateDialog() async {
           pinned: true,
           actions: [
             IconButton(
+              icon: const Icon(Icons.share_outlined),
+              tooltip: 'Share campaign',
+              onPressed: () {
+                final text = '${c.title}\n${AppFormatters.pkrAmount(c.raisedAmount)} raised of ${AppFormatters.pkrAmount(c.targetAmount)}';
+                Clipboard.setData(ClipboardData(text: text));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Campaign details copied')),
+                );
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.flag_outlined),
               tooltip: 'Report',
               onPressed: () => showDialog(
@@ -376,12 +454,12 @@ Future<void> _showManualDonateDialog() async {
                     imageUrl: c.imageUrl!,
                     fit: BoxFit.cover,
                     errorWidget: (_, __, ___) => Container(
-                      color: cs.surfaceVariant,
+                      color: cs.surfaceContainerHighest,
                       child: Icon(Icons.campaign, size: 80, color: cs.onSurfaceVariant),
                     ),
                   )
                 : Container(
-                    color: cs.surfaceVariant,
+                    color: cs.surfaceContainerHighest,
                     child: Icon(Icons.campaign, size: 80, color: cs.onSurfaceVariant),
                   ),
           ),
@@ -393,14 +471,15 @@ Future<void> _showManualDonateDialog() async {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Category + Status
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     Chip(
                       label: Text(c.category),
                       visualDensity: VisualDensity.compact,
                       backgroundColor: cs.primaryContainer,
                     ),
-                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
@@ -415,6 +494,11 @@ Future<void> _showManualDonateDialog() async {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                    ),
+                    Chip(
+                      avatar: const Icon(Icons.people_outline, size: 16),
+                      label: Text('${c.donorCount} donors'),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ],
                 ),
@@ -435,7 +519,7 @@ Future<void> _showManualDonateDialog() async {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.verified, size: 16, color: Colors.green[700]),
+                        Icon(Icons.verified, size: 16, color: cs.primary),
                         const SizedBox(width: 4),
                         Text(c.orgName?? 'Verified NGO', style: tt.bodyMedium),
                       ],
@@ -461,32 +545,40 @@ Future<void> _showManualDonateDialog() async {
                   ),
                   child: Column(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final stacked = constraints.maxWidth < 330;
+                          return Flex(
+                            direction: stacked ? Axis.vertical : Axis.horizontal,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: stacked ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
                             children: [
-                              Text('Raised', style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
-                              const SizedBox(height: 4),
-                              Text(
-                                'PKR ${_formatAmount(c.raisedAmount)}',
-                                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Raised', style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    AppFormatters.pkrAmount(c.raisedAmount),
+                                    style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              if (stacked) const SizedBox(height: 12),
+                              Column(
+                                crossAxisAlignment: stacked ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+                                children: [
+                                  Text('Goal', style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    AppFormatters.pkrAmount(c.targetAmount),
+                                    style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('Goal', style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
-                              const SizedBox(height: 4),
-                              Text(
-                                'PKR ${_formatAmount(c.targetAmount)}',
-                                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
                       ClipRRect(
@@ -505,6 +597,23 @@ Future<void> _showManualDonateDialog() async {
                     ],
                   ),
                 ),
+                if (!c.isOpenForDonations) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cs.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      c.status == 'COMPLETED' || c.daysLeft == 0
+                          ? 'Campaign ended'
+                          : 'Donations are paused',
+                      style: tt.bodyMedium?.copyWith(color: cs.onErrorContainer),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
 
                 // Description
@@ -526,11 +635,6 @@ Future<void> _showManualDonateDialog() async {
     );
   }
 
-  String _formatAmount(double amount) {
-    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}M';
-    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}K';
-    return amount.toInt().toString();
-  }
 }
 
 class DonateSheet extends StatefulWidget {
@@ -550,16 +654,36 @@ class _DonateSheetState extends State<DonateSheet> {
   final _emailController = TextEditingController();
   String _paymentMethod = 'MOCK';
   bool _loading = false;
+  bool _canSubmit = false;
   final _api = ApiClient();
 
-  final List<int> _quickAmounts = [500, 1000, 5000, 10000];
+  final List<int> _quickAmounts = [500, 1000, 5000];
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController.addListener(_updateCanSubmit);
+    _nameController.addListener(_updateCanSubmit);
+    _emailController.addListener(_updateCanSubmit);
+  }
 
   @override
   void dispose() {
+    _amountController.removeListener(_updateCanSubmit);
+    _nameController.removeListener(_updateCanSubmit);
+    _emailController.removeListener(_updateCanSubmit);
     _amountController.dispose();
     _nameController.dispose();
     _emailController.dispose();
     super.dispose();
+  }
+
+  void _updateCanSubmit() {
+    final amount = AppFormatters.pkrInt(_amountController.text);
+    final email = _emailController.text.trim();
+    final emailOk = email.isEmpty || RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(email);
+    final next = amount >= 100 && _nameController.text.trim().isNotEmpty && emailOk;
+    if (mounted && next != _canSubmit) setState(() => _canSubmit = next);
   }
 
   Future<void> _donate() async {
@@ -569,7 +693,7 @@ class _DonateSheetState extends State<DonateSheet> {
     try {
       final res = await _api.dio.post('/donations', data: {
         'campaign_id': widget.campaign.id,
-        'amount': double.parse(_amountController.text),
+        'amount': AppFormatters.pkrInt(_amountController.text),
         'donor_name': _nameController.text.trim(),
         'donor_email': _emailController.text.trim().isEmpty? null : _emailController.text.trim(),
         'payment_method': _paymentMethod,
@@ -577,17 +701,18 @@ class _DonateSheetState extends State<DonateSheet> {
       });
 
       if (mounted) {
-        final txnRef = res.data['transaction_ref'];
+        final txnRef = res.data?['transaction_ref']?.toString();
+        final refDisplay = txnRef != null && txnRef.length >= 8 ? txnRef.substring(0, 8) : (txnRef ?? 'OK');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Donation successful! Ref: ${txnRef.substring(0, 8)}...'),
-            backgroundColor: Colors.green,
+            content: Text('Donation successful! Ref: $refDisplay...'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
         widget.onSuccess();
       }
     } on DioException catch (e) {
-      final msg = e.response?.data['error']?? 'Donation failed';
+      final msg = ApiClient.messageFromError(e, 'Donation failed');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
@@ -610,6 +735,7 @@ class _DonateSheetState extends State<DonateSheet> {
       ),
       child: Form(
         key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -642,9 +768,9 @@ class _DonateSheetState extends State<DonateSheet> {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               validator: (v) {
-                if (v!.isEmpty) return 'Required';
-                final amt = int.tryParse(v);
-                if (amt == null || amt < 100) return 'Min PKR 100';
+                final amt = AppFormatters.pkrInt(v);
+                if (amt == 0) return 'Required';
+                if (amt < 100) return 'Min PKR 100';
                 return null;
               },
             ),
@@ -665,6 +791,14 @@ class _DonateSheetState extends State<DonateSheet> {
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.emailAddress,
+              validator: (v) {
+                final value = v?.trim() ?? '';
+                if (value.isEmpty) return null;
+                if (!RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(value)) {
+                  return 'Invalid email';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField(
@@ -682,7 +816,7 @@ class _DonateSheetState extends State<DonateSheet> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: _loading? null : _donate,
+                onPressed: _loading || !_canSubmit ? null : _donate,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.all(16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -47,6 +47,7 @@ router.post('/', auth(), async (req, res, next) => {
       JOIN ngo_profiles n ON c.ngo_id = n.id
       JOIN users u ON n.user_id = u.id
       WHERE c.id = $1
+      FOR UPDATE OF c
     `, [campaign_id]);
 
     if (!campaign.rows[0]) throw new Error('Campaign not found');

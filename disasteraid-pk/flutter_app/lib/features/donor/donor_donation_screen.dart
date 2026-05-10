@@ -2,8 +2,9 @@ import 'package:disasteraid_pk/features/donor/model/donation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/app_formatters.dart';
+import '../campaigns/screens/campaign_detail_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -34,7 +35,8 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
     try {
       final res = await _api.dio.get('/donations/my');
       // ApiClient already unwraps {success, data} -> returns data array
-      final list = List<Map<String, dynamic>>.from(res.data);
+      final raw = res.data is List ? res.data as List : const [];
+      final list = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       if (mounted) {
         setState(() {
           _donations = list.map((e) => Donation.fromJson(e)).toList();
@@ -48,7 +50,7 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
       });
     } catch (e) {
       if (mounted) setState(() {
-        _error = 'Failed to load donations';
+        _error = ApiClient.messageFromError(e, 'Failed to load donations');
         _loading = false;
       });
     }
@@ -59,7 +61,7 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
     return _donations.where((d) => d.status.toLowerCase() == _filter).toList();
   }
 
-  double get _totalDonated {
+  int get _totalDonated {
     return _donations
     .where((d) => d.status == 'VERIFIED')
       .fold(0, (sum, d) => sum + d.amount);
@@ -86,7 +88,9 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
       return;
     }
 
-    final url = '${_api.dio.options.baseUrl}${d.receiptUrl}';
+    final base = _api.dio.options.baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+    final receipt = d.receiptUrl!;
+    final url = receipt.startsWith('http') ? receipt : '$base/$receipt'.replaceAll(RegExp(r'(?<!:)//+'), '/');
     try {
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
@@ -133,7 +137,7 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'PKR ${_formatAmount(_totalDonated)}',
+                  AppFormatters.pkrAmount(_totalDonated),
                   style: tt.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: cs.onPrimaryContainer,
@@ -150,32 +154,27 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
             ),
           ),
 
-          // Filter Chips
-          Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 FilterChip(
                   label: const Text('All'),
                   selected: _filter == 'all',
                   onSelected: (_) => setState(() => _filter = 'all'),
                 ),
-                const SizedBox(width: 8),
                 FilterChip(
                   label: const Text('Verified'),
                   selected: _filter == 'verified',
                   onSelected: (_) => setState(() => _filter = 'verified'),
                 ),
-                const SizedBox(width: 8),
                 FilterChip(
                   label: const Text('Pending'),
                   selected: _filter == 'pending',
                   onSelected: (_) => setState(() => _filter = 'pending'),
                 ),
-                const SizedBox(width: 8),
                 FilterChip(
                   label: const Text('Rejected'),
                   selected: _filter == 'rejected',
@@ -245,15 +244,15 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
           donation: d,
           statusColor: _statusColor(d.status),
           onDownloadReceipt: d.receiptUrl!= null? () => _downloadReceipt(d) : null,
+          onTap: d.campaignId == null
+              ? null
+              : () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => CampaignDetailScreen(id: d.campaignId!)),
+                  ),
         );
       },
     );
-  }
-
-  String _formatAmount(double amount) {
-    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}M';
-    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}K';
-    return amount.toInt().toString();
   }
 }
 
@@ -261,27 +260,27 @@ class _DonationCard extends StatelessWidget {
   final Donation donation;
   final Color statusColor;
   final VoidCallback? onDownloadReceipt;
+  final VoidCallback? onTap;
 
   const _DonationCard({
     required this.donation,
     required this.statusColor,
     this.onDownloadReceipt,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
-
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant),
-      ),
-      child: Padding(
+        onTap: onTap,
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,7 +337,7 @@ class _DonationCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'PKR ${donation.amount.toInt()}',
+                      AppFormatters.pkrAmount(donation.amount),
                       style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -352,7 +351,7 @@ class _DonationCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      DateFormat('dd MMM yyyy').format(donation.createdAt),
+                      AppFormatters.formatDate(donation.createdAt),
                       style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                     ),
                   ],
@@ -382,7 +381,7 @@ class _DonationCard extends StatelessWidget {
                   Icon(Icons.verified, size: 14, color: Colors.green),
                   const SizedBox(width: 4),
                   Text(
-                    'Verified ${DateFormat('dd MMM').format(donation.verifiedAt!)}',
+                    'Verified ${AppFormatters.formatDate(donation.verifiedAt!)}',
                     style: tt.bodySmall?.copyWith(color: Colors.green),
                   ),
                 ],
@@ -418,6 +417,7 @@ class _DonationCard extends StatelessWidget {
               ),
           ],
         ),
+      ),
       ),
     );
   }

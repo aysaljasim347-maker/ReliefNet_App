@@ -1,7 +1,7 @@
 import 'package:disasteraid_pk/features/admin/admin_audit_screen.dart';
 import 'package:disasteraid_pk/features/admin/admin_request_screen.dart';
 import 'package:disasteraid_pk/features/admin/admin_reports_screen.dart';
-import 'package:disasteraid_pk/features/admin/admin_donations_screen.dart'; // ADDED
+import 'package:disasteraid_pk/features/admin/admin_donations_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -21,27 +21,37 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   int _index = 0;
-  Map<String, dynamic>? _stats;
-  bool _loading = true;
-  String? _error;
-  final _api = ApiClient();
 
-  final List<Widget> _screens = [
-    const _AdminStatsTab(),
-    const AdminNgosScreen(),
-    const AdminCampaignsScreen(),
-    const AdminDonationsScreen(), // ADDED
-    const AdminWithdrawalsScreen(),
-    const AdminRequestsScreen(),
-    const AdminReportsScreen(),
-    const AdminAuditScreen(),
+  static const _navItems = [
+    _NavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
+    _NavItem(Icons.business_outlined, Icons.business, 'NGOs'),
+    _NavItem(Icons.campaign_outlined, Icons.campaign, 'Campaigns'),
+    _NavItem(Icons.payments_outlined, Icons.payments, 'Donations'),
+    _NavItem(Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Withdrawals'),
+    _NavItem(Icons.inbox_outlined, Icons.inbox, 'Requests'),
+    _NavItem(Icons.report_outlined, Icons.report, 'Reports'),
+    _NavItem(Icons.history_outlined, Icons.history, 'Audit Log'),
+  ];
+
+  final List<Widget> _screens = const [
+    _AdminStatsTab(),
+    AdminNgosScreen(),
+    AdminCampaignsScreen(),
+    AdminDonationsScreen(),
+    AdminWithdrawalsScreen(),
+    AdminRequestsScreen(),
+    AdminReportsScreen(),
+    AdminAuditScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin Panel'),
+        title: Text(_navItems[_index].label),
         scrolledUnderElevation: 0,
         actions: [
           IconButton(
@@ -51,59 +61,78 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ],
       ),
+      drawer: NavigationDrawer(
+        selectedIndex: _index,
+        onDestinationSelected: (i) {
+          setState(() => _index = i);
+          Navigator.pop(context); // Close drawer
+        },
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.admin_panel_settings, size: 40, color: cs.primary),
+                const SizedBox(height: 12),
+                Text('Admin Panel', style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                Text('DisasterAid PK', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          const Divider(indent: 24, endIndent: 24),
+          ...List.generate(_navItems.length, (i) {
+            final item = _navItems[i];
+            // Add a divider before "Reports" section
+            if (i == 5) {
+              return Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Divider(),
+                  ),
+                  NavigationDrawerDestination(
+                    icon: Icon(item.icon),
+                    selectedIcon: Icon(item.selectedIcon),
+                    label: Text(item.label),
+                  ),
+                ],
+              );
+            }
+            return NavigationDrawerDestination(
+              icon: Icon(item.icon),
+              selectedIcon: Icon(item.selectedIcon),
+              label: Text(item.label),
+            );
+          }),
+        ],
+      ),
+      // Bottom nav for the top 4 most-used tabs (fits 360px)
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index < 4 ? _index : 0,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        destinations: List.generate(4, (i) {
+          final item = _navItems[i];
+          return NavigationDestination(
+            icon: Icon(item.icon),
+            selectedIcon: Icon(item.selectedIcon),
+            label: item.label,
+          );
+        }),
+      ),
       body: IndexedStack(
         index: _index,
         children: _screens,
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Stats',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.business_outlined),
-            selectedIcon: Icon(Icons.business),
-            label: 'NGOs',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.campaign_outlined),
-            selectedIcon: Icon(Icons.campaign),
-            label: 'Campaigns',
-          ),
-          // ADDED: Donations tab
-          NavigationDestination(
-            icon: Icon(Icons.payments_outlined),
-            selectedIcon: Icon(Icons.payments),
-            label: 'Donations',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet),
-            label: 'Withdrawals',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inbox_outlined),
-            selectedIcon: Icon(Icons.inbox),
-            label: 'Requests',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.report_outlined),
-            selectedIcon: Icon(Icons.report),
-            label: 'Reports',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'Audit',
-          ),
-        ],
-      ),
     );
   }
+}
+
+class _NavItem {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  const _NavItem(this.icon, this.selectedIcon, this.label);
 }
 
 class _AdminStatsTab extends StatefulWidget {
@@ -118,7 +147,7 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
   bool _loading = true;
   String? _error;
   final _api = ApiClient();
-  final _currency = NumberFormat.compact(locale: 'en_PK');
+  final _currency = NumberFormat.currency(locale: 'en_PK', symbol: 'PKR ', decimalDigits: 0);
 
   @override
   void initState() {
@@ -152,14 +181,14 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
   }
 
   Widget _buildBody(ColorScheme cs, TextTheme tt) {
-    if (_loading) return _buildShimmer();
+    if (_loading) return _buildShimmer(cs);
     if (_error!= null) return ErrorState(message: _error!, onRetry: _loadStats);
     if (_stats == null) return const Center(child: Text('No data'));
 
-    final users = _stats!['users']?? {};
-    final ngos = _stats!['ngos']?? {};
-    final campaigns = _stats!['campaigns']?? {};
-    final donations = _stats!['donations']?? {};
+    final users = _stats!['users'] ?? {};
+    final ngos = _stats!['ngos'] ?? {};
+    final campaigns = _stats!['campaigns'] ?? {};
+    final donations = _stats!['donations'] ?? {};
 
     return RefreshIndicator(
       onRefresh: _loadStats,
@@ -178,25 +207,25 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
             children: [
               _StatCard(
                 title: 'Total Users',
-                value: '${users['total']?? 0}',
+                value: '${users['total'] ?? 0}',
                 icon: Icons.people_outline,
                 color: Colors.blue,
               ),
               _StatCard(
                 title: 'Donors',
-                value: '${users['donors']?? 0}',
+                value: '${users['donors'] ?? 0}',
                 icon: Icons.favorite_outline,
                 color: Colors.pink,
               ),
               _StatCard(
                 title: 'NGOs',
-                value: '${ngos['approved']?? 0}/${users['ngos']?? 0}',
+                value: '${ngos['approved'] ?? 0}/${users['ngos'] ?? 0}',
                 icon: Icons.verified_outlined,
                 color: Colors.green,
               ),
               _StatCard(
                 title: 'Pending NGOs',
-                value: '${ngos['pending']?? 0}',
+                value: '${ngos['pending'] ?? 0}',
                 icon: Icons.pending_outlined,
                 color: Colors.orange,
               ),
@@ -215,25 +244,25 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
             children: [
               _StatCard(
                 title: 'Active Campaigns',
-                value: '${campaigns['active']?? 0}/${campaigns['total']?? 0}',
+                value: '${campaigns['active'] ?? 0}/${campaigns['total'] ?? 0}',
                 icon: Icons.campaign_outlined,
                 color: Colors.teal,
               ),
               _StatCard(
                 title: 'Total Raised',
-                value: 'PKR ${_currency.format(_parseAmount(donations['total_amount']))}',
+                value: _currency.format(_parseAmount(donations['total_amount'])),
                 icon: Icons.volunteer_activism_outlined,
                 color: Colors.purple,
               ),
               _StatCard(
                 title: 'Total Target',
-                value: 'PKR ${_currency.format(_parseAmount(campaigns['total_target']))}',
+                value: _currency.format(_parseAmount(campaigns['total_target'])),
                 icon: Icons.flag_outlined,
                 color: Colors.indigo,
               ),
               _StatCard(
                 title: 'Donations',
-                value: '${donations['total_donations']?? 0}',
+                value: '${donations['total_donations'] ?? 0}',
                 icon: Icons.receipt_long_outlined,
                 color: Colors.brown,
               ),
@@ -247,20 +276,23 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
   double _parseAmount(dynamic val) {
     if (val == null) return 0;
     if (val is num) return val.toDouble();
-    return double.tryParse(val.toString())?? 0;
+    return double.tryParse(val.toString()) ?? 0;
   }
 
-  Widget _buildShimmer() {
+  Widget _buildShimmer(ColorScheme cs) {
+    final baseColor = cs.surfaceContainerHighest;
+    final highlightColor = cs.surfaceContainerLow;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Shimmer.fromColors(
-          baseColor: Colors.grey[300]!,
-          highlightColor: Colors.grey[100]!,
+          baseColor: baseColor,
+          highlightColor: highlightColor,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(height: 24, width: 200, color: Colors.white),
+              Container(height: 24, width: 200, decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(4))),
               const SizedBox(height: 16),
               GridView.count(
                 crossAxisCount: 2,
@@ -270,11 +302,11 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.3,
                 children: List.generate(4, (_) => Container(
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(12)),
                 )),
               ),
               const SizedBox(height: 24),
-              Container(height: 24, width: 250, color: Colors.white),
+              Container(height: 24, width: 250, decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(4))),
               const SizedBox(height: 16),
               GridView.count(
                 crossAxisCount: 2,
@@ -284,7 +316,7 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.3,
                 children: List.generate(4, (_) => Container(
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(12)),
                 )),
               ),
             ],

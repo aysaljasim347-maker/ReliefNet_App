@@ -19,7 +19,7 @@ router.get('/:requestId', auth(), async (req, res, next) => {
     `, [requestId, req.user.id]);
 
     if (!check.rows[0]) {
-      return res.error('Access denied', 403);
+      return res.fail('Access denied', 403);
     }
 
     const result = await db.query(`
@@ -46,7 +46,7 @@ router.post('/:requestId', auth(), async (req, res, next) => {
   try {
     const { requestId } = req.params;
     const { error, value } = messageSchema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
+    if (error) return res.fail(error.details[0].message, 400);
 
     const check = await db.query(`
       SELECT a.id, a.beneficiary_id, a.volunteer_id
@@ -55,7 +55,7 @@ router.post('/:requestId', auth(), async (req, res, next) => {
     `, [requestId, req.user.id]);
 
     if (!check.rows[0]) {
-      return res.error('Access denied', 403);
+      return res.fail('Access denied', 403);
     }
 
     const result = await db.query(

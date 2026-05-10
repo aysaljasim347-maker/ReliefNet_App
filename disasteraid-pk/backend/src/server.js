@@ -87,6 +87,15 @@ const apiLimiter = rateLimit({
   message: { success: false, data: null, error: 'Too many requests, try again later' }
 });
 
+const donationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  message: { success: false, data: null, error: 'Too many donations. Max 5 per minute.' }
+});
+
 app.use('/api/auth', authLimiter);
 app.use('/api/', apiLimiter);
 
@@ -97,6 +106,10 @@ app.get('/api/health', (req, res) => res.success({
   uptime: process.uptime()
 }));
 
+// Static file serving for receipts and uploads
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Routes
 app.use('/api/chat', require('./modules/chat/routes'));
 app.use('/api/auth', require('./modules/auth/routes'));
@@ -104,9 +117,10 @@ app.use('/api/ngos', require('./modules/ngos/routes'));
 app.use('/api/ngos', require('./modules/ngos/withdrawal_routes'));
 app.use('/api/ngos', require('./modules/ngos/aid_routes'));
 app.use('/api/campaigns', require('./modules/campaigns/routes'));
-app.use('/api/donations', require('./modules/donations/routes'));
+app.use('/api/donations', donationLimiter, require('./modules/donations/routes'));
 app.use('/api/volunteers', require('./modules/volunteers/routes'));
 app.use('/api/admin', require('./modules/admin/routes'));
+app.use('/api/admin/export', require('./modules/admin/export_routes'));
 app.use('/api/notifications', require('./modules/notifications/routes'));
 app.use('/api', require('./modules/beneficiaries/routes'));
 

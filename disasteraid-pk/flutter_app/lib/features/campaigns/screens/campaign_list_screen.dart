@@ -1,15 +1,20 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
-import '../../../core/auth/auth_provider.dart';
+
 import '../../../core/api/api_client.dart';
-import '../services/campaign_service.dart';
-import '../models/campaign.dart';
-import 'campaign_detail_screen.dart';
-import '../../../shared/widgets/report_dialog.dart';
+import '../../../core/auth/auth_provider.dart';
+import '../../../core/utils/app_formatters.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
+import '../models/campaign.dart';
+import '../services/campaign_service.dart';
+import '../../../shared/widgets/report_dialog.dart';
+import 'campaign_detail_screen.dart';
 
 class CampaignListScreen extends StatefulWidget {
   const CampaignListScreen({super.key});
@@ -19,60 +24,123 @@ class CampaignListScreen extends StatefulWidget {
 
 class _CampaignListScreenState extends State<CampaignListScreen> {
   final _service = CampaignService();
-  List<Campaign> _campaigns = [];
+  final _searchController = TextEditingController();
+  final _locationController = TextEditingController();
+  final List<Campaign> _campaigns = [];
+  Timer? _debounce;
   bool _loading = true;
   String? _error;
   String? _selectedCategory;
+  String _sort = 'funded';
+  String _query = '';
+  String _location = '';
 
-  final List<Map<String, dynamic>> _categories = [
-    {'key': 'all', 'label': 'All', 'icon': Icons.apps},
+  final List<Map<String, dynamic>> _categories = const [
+    {'key': null, 'label': 'All', 'icon': Icons.apps},
     {'key': 'FOOD', 'label': 'Food', 'icon': Icons.restaurant},
     {'key': 'MEDICAL', 'label': 'Medical', 'icon': Icons.medical_services},
-    {'key': 'SHELTER', 'label': 'Shelter', 'icon': Icons.home},
-    {'key': 'EDUCATION', 'label': 'Education', 'icon': Icons.school},
+    {'key': 'SHELTER', 'label': 'Shelter', 'icon': Icons.home_outlined},
+    {'key': 'EDUCATION', 'label': 'Education', 'icon': Icons.school_outlined},
     {'key': 'CLOTHING', 'label': 'Clothing', 'icon': Icons.checkroom},
-    {'key': 'OTHER', 'label': 'Other', 'icon': Icons.category},
+    {'key': 'OTHER', 'label': 'Other', 'icon': Icons.category_outlined},
   ];
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_onSearchChanged);
+    _locationController.addListener(_onSearchChanged);
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() {
+        _query = _searchController.text.trim().toLowerCase();
+        _location = _locationController.text.trim().toLowerCase();
+      });
     });
+  }
+
+  Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
-      final list = await _service.getAllCampaigns(
-        category: _selectedCategory == 'all'? null : _selectedCategory,
-      );
-      if (mounted) setState(() {
-        _campaigns = list;
+      final list = await _service.getAllCampaigns(category: _selectedCategory);
+      if (!mounted) return;
+      setState(() {
+        _campaigns
+          ..clear()
+          ..addAll(list);
         _loading = false;
       });
     } on ApiException catch (e) {
-      if (mounted) setState(() {
-        _error = e.message;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() {
-        _error = 'Failed to load campaigns';
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = ApiClient.messageFromError(e, 'Failed to load campaigns');
+          _loading = false;
+        });
+      }
     }
+  }
+
+  List<Campaign> get _visibleCampaigns {
+    final filtered = _campaigns.where((campaign) {
+      final haystack = [
+        campaign.title,
+        campaign.description,
+        campaign.orgName ?? '',
+        campaign.category,
+      ].join(' ').toLowerCase();
+      final location = (campaign.location ?? '').toLowerCase();
+      return (_query.isEmpty || haystack.contains(_query)) &&
+          (_location.isEmpty || location.contains(_location));
+    }).toList();
+
+    filtered.sort((a, b) {
+      switch (_sort) {
+        case 'ending':
+          final aDate = a.endDate ?? DateTime(2999);
+          final bDate = b.endDate ?? DateTime(2999);
+          return aDate.compareTo(bDate);
+        case 'newest':
+          return b.createdAt.compareTo(a.createdAt);
+        case 'funded':
+        default:
+          return b.percentRaised.compareTo(a.percentRaised);
+      }
+    });
+    return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Active Campaigns'),
+        title: const Text('Campaigns'),
         scrolledUnderElevation: 0,
         actions: [
           IconButton(
@@ -84,36 +152,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
       ),
       body: Column(
         children: [
-          // Category Filter Chips
-          Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _categories.length,
-              itemBuilder: (context, i) {
-                final cat = _categories[i];
-                final selected = _selectedCategory == cat['key'] ||
-                    (cat['key'] == 'all' && _selectedCategory == null);
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    avatar: Icon(cat['icon'], size: 18),
-                    label: Text(cat['label']),
-                    selected: selected,
-                    showCheckmark: false,
-                    onSelected: (_) {
-                      setState(() => _selectedCategory = cat['key'] == 'all'? null : cat['key']);
-                      _load();
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-          const Divider(height: 1),
-          // Campaign Grid
+          _buildFilters(tt),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
@@ -128,143 +167,216 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) return _buildShimmerGrid();
-    if (_error!= null) return ErrorState(message: _error!, onRetry: _load);
-    if (_campaigns.isEmpty) return _buildEmptyState();
-    return _buildCampaignGrid();
+  Widget _buildFilters(TextTheme tt) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              labelText: 'Search campaigns',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close),
+                      onPressed: _searchController.clear,
+                    ),
+              border: const OutlineInputBorder(),
+            ),
+            textInputAction: TextInputAction.search,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _locationController,
+            decoration: InputDecoration(
+              labelText: 'Filter by city or province',
+              prefixIcon: const Icon(Icons.location_on_outlined),
+              suffixIcon: _location.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear location',
+                      icon: const Icon(Icons.close),
+                      onPressed: _locationController.clear,
+                    ),
+              border: const OutlineInputBorder(),
+            ),
+            textInputAction: TextInputAction.search,
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _sort,
+            decoration: const InputDecoration(
+              labelText: 'Sort',
+              prefixIcon: Icon(Icons.sort),
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'funded', child: Text('% funded')),
+              DropdownMenuItem(value: 'ending', child: Text('Ending soon')),
+              DropdownMenuItem(value: 'newest', child: Text('Newest')),
+            ],
+            onChanged: (value) => setState(() => _sort = value ?? 'funded'),
+          ),
+          const SizedBox(height: 12),
+          Text('Category', style: tt.labelLarge),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _categories.map((cat) {
+              final key = cat['key'] as String?;
+              final selected = _selectedCategory == key;
+              return FilterChip(
+                avatar: Icon(cat['icon'] as IconData, size: 18),
+                label: Text(cat['label'] as String),
+                selected: selected,
+                showCheckmark: false,
+                onSelected: (_) {
+                  setState(() => _selectedCategory = key);
+                  _load();
+                },
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildShimmerGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.72,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: 6,
-      itemBuilder: (_, __) => Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+  Widget _buildBody() {
+    if (_loading) return _CampaignListShimmer();
+    if (_error != null) {
+      return ListView(children: [
+        SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.55,
+          child: ErrorState(message: _error!, onRetry: _load),
+        ),
+      ]);
+    }
+    final visible = _visibleCampaigns;
+    if (visible.isEmpty) {
+      return ListView(children: [
+        SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.55,
+          child: EmptyState(
+            icon: Icons.campaign_outlined,
+            title: 'No campaigns yet',
+            subtitle: 'Try a different search, category, or location',
+            onAction: () {
+              _searchController.clear();
+              _locationController.clear();
+              setState(() {
+                _selectedCategory = null;
+                _query = '';
+                _location = '';
+              });
+              _load();
+            },
+            actionLabel: 'Reset filters',
+          ),
+        ),
+      ]);
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      itemCount: visible.length,
+      itemBuilder: (context, i) => CampaignCard(campaign: visible[i]),
+    );
+  }
+}
+
+class _CampaignListShimmer extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      itemCount: 4,
+      itemBuilder: (_, __) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Shimmer.fromColors(
+          baseColor: cs.surfaceContainerHighest,
+          highlightColor: cs.surfaceContainerLow,
+          child: Container(
+            height: 280,
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         ),
       ),
     );
   }
-
-  Widget _buildEmptyState() {
-    return EmptyState(
-      icon: Icons.campaign_outlined,
-      title: 'No campaigns found',
-      subtitle: _selectedCategory == null
-         ? 'Check back later for new campaigns'
-          : 'Try selecting a different category',
-      onAction: _load,
-      actionLabel: 'Refresh',
-    );
-  }
-
-  Widget _buildCampaignGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.72,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: _campaigns.length,
-      itemBuilder: (context, i) => _CampaignCard(campaign: _campaigns[i]),
-    );
-  }
 }
 
-class _CampaignCard extends StatelessWidget {
+class CampaignCard extends StatelessWidget {
   final Campaign campaign;
-  const _CampaignCard({required this.campaign});
+  final VoidCallback? onTap;
+  final bool showReport;
 
-  Color _urgencyColor(BuildContext context) {
-    final percent = campaign.percentRaised;
-    if (percent < 30) return Theme.of(context).colorScheme.error;
-    if (percent < 70) return Colors.orange;
-    return Colors.green;
-  }
+  const CampaignCard({
+    super.key,
+    required this.campaign,
+    this.onTap,
+    this.showReport = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final daysText = campaign.daysLeft == null ? 'No end date' : '${campaign.daysLeft} days left';
+    final statusColor = campaign.isOpenForDonations ? cs.primary : cs.error;
 
     return Card(
+      margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant),
-      ),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => CampaignDetailScreen(id: campaign.id)),
-        ),
+        onTap: onTap ??
+            () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => CampaignDetailScreen(id: campaign.id)),
+                ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image + Report + Urgency
             Stack(
               children: [
                 AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: campaign.imageUrl!= null
-                     ? CachedNetworkImage(
+                  child: campaign.imageUrl != null
+                      ? CachedNetworkImage(
                           imageUrl: campaign.imageUrl!,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(color: cs.surfaceVariant),
-                          errorWidget: (_, __, ___) => Container(
-                            color: cs.surfaceVariant,
-                            child: Icon(Icons.image_not_supported, color: cs.onSurfaceVariant),
-                          ),
+                          placeholder: (_, __) => Container(color: cs.surfaceContainerHighest),
+                          errorWidget: (_, __, ___) => _ImageFallback(icon: Icons.image_not_supported_outlined),
                         )
-                      : Container(
-                          color: cs.surfaceVariant,
-                          child: Icon(Icons.campaign, size: 40, color: cs.onSurfaceVariant),
-                        ),
+                      : _ImageFallback(icon: Icons.campaign_outlined),
                 ),
-                // Urgency Pill
                 Positioned(
                   top: 8,
                   left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _urgencyColor(context),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${campaign.percentRaised}%',
-                      style: tt.labelSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  child: _Badge(
+                    label: '${campaign.percentRaised}% funded',
+                    foregroundColor: cs.onPrimaryContainer,
+                    backgroundColor: cs.primaryContainer,
                   ),
                 ),
-                // Report Menu
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: Material(
-                    color: Colors.black45,
-                    borderRadius: BorderRadius.circular(20),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => showDialog(
+                if (showReport)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Report campaign',
+                      icon: const Icon(Icons.more_vert),
+                      onPressed: () => showDialog(
                         context: context,
                         builder: (_) => ReportDialog(
                           targetType: 'campaign',
@@ -272,73 +384,90 @@ class _CampaignCard extends StatelessWidget {
                           targetName: campaign.title,
                         ),
                       ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Icons.more_vert, color: Colors.white, size: 18),
-                      ),
                     ),
                   ),
-                ),
               ],
             ),
-            // Content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Category
-                    Text(
-                      campaign.category,
-                      style: tt.labelSmall?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w600,
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _Badge(
+                        label: campaign.category,
+                        foregroundColor: cs.onSecondaryContainer,
+                        backgroundColor: cs.secondaryContainer,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    // Title
-                    Text(
-                      campaign.title,
-                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    // Org
-                    Text(
-                      campaign.orgName?? 'Verified NGO',
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    // Progress
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: campaign.progress,
-                        backgroundColor: cs.surfaceVariant,
-                        minHeight: 6,
+                      _Badge(
+                        label: campaign.status,
+                        foregroundColor: campaign.isOpenForDonations ? cs.onPrimaryContainer : cs.onErrorContainer,
+                        backgroundColor: campaign.isOpenForDonations ? cs.primaryContainer : cs.errorContainer,
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    campaign.title,
+                    style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    campaign.orgName ?? 'Verified NGO',
+                    style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: campaign.progress,
+                      backgroundColor: cs.surfaceContainerHighest,
+                      minHeight: 8,
                     ),
-                    const SizedBox(height: 6),
-                    // Amount
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'PKR ${_formatAmount(campaign.raisedAmount)}',
-                          style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          AppFormatters.pkrAmount(campaign.raisedAmount),
+                          style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                        Text(
-                          '${campaign.percentRaised}%',
-                          style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                      Text(
+                        'of ${NumberFormat.compact(locale: 'en_PK').format(campaign.targetAmount)}',
+                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 18, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          campaign.location ?? 'Pakistan',
+                          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.schedule_outlined, size: 18, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(daysText, style: tt.bodySmall?.copyWith(color: statusColor)),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -346,10 +475,48 @@ class _CampaignCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _formatAmount(double amount) {
-    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}M';
-    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}K';
-    return amount.toInt().toString();
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color foregroundColor;
+  final Color backgroundColor;
+
+  const _Badge({
+    required this.label,
+    required this.foregroundColor,
+    required this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: foregroundColor,
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
+}
+
+class _ImageFallback extends StatelessWidget {
+  final IconData icon;
+  const _ImageFallback({required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      color: cs.surfaceContainerHighest,
+      child: Center(child: Icon(icon, color: cs.onSurfaceVariant, size: 48)),
+    );
   }
 }

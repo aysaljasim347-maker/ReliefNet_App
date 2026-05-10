@@ -20,7 +20,7 @@ const aidRequestSchema = Joi.object({
 router.post('/aid-requests', auth('beneficiary'), async (req, res, next) => {
   try {
     const { error, value } = aidRequestSchema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
+    if (error) return res.fail(error.details[0].message, 400);
 
     const { campaign_id, category, items_needed, description, urgency, family_size, location, latitude, longitude } = value;
     let ngo_id = null;
@@ -33,11 +33,11 @@ router.post('/aid-requests', auth('beneficiary'), async (req, res, next) => {
         WHERE c.id = $1
       `, [campaign_id]);
 
-      if (!campaign.rows[0]) return res.error('Campaign not found', 404);
-      if (campaign.rows[0].status!== 'ACTIVE') return res.error('Campaign not active', 400);
-      if (campaign.rows[0].ngo_status!== 'APPROVED') return res.error('NGO not verified', 400);
+      if (!campaign.rows[0]) return res.fail('Campaign not found', 404);
+      if (campaign.rows[0].status!== 'ACTIVE') return res.fail('Campaign not active', 400);
+      if (campaign.rows[0].ngo_status!== 'APPROVED') return res.fail('NGO not verified', 400);
       if (campaign.rows[0].end_date && new Date(campaign.rows[0].end_date) < new Date()) {
-        return res.error('Campaign has ended', 400);
+        return res.fail('Campaign has ended', 400);
       }
       ngo_id = campaign.rows[0].ngo_id;
 
@@ -46,7 +46,7 @@ router.post('/aid-requests', auth('beneficiary'), async (req, res, next) => {
          WHERE beneficiary_id = $1 AND campaign_id = $2 AND status IN ('PENDING', 'APPROVED', 'ASSIGNED')`,
         [req.user.id, campaign_id]
       );
-      if (existing.rows[0]) return res.error('You already have an active request for this campaign', 400);
+      if (existing.rows[0]) return res.fail('You already have an active request for this campaign', 400);
     } else {
       const defaultNgo = await db.query(
         `SELECT id FROM ngo_profiles WHERE status='APPROVED' ORDER BY created_at ASC LIMIT 1`
@@ -101,7 +101,7 @@ router.get('/aid-requests/:id', auth('beneficiary'), async (req, res, next) => {
       WHERE a.id = $1 AND a.beneficiary_id = $2
     `, [req.params.id, req.user.id]);
 
-    if (!result.rows[0]) return res.error('Request not found', 404);
+    if (!result.rows[0]) return res.fail('Request not found', 404);
     res.success(result.rows[0]);
   } catch (e) { next(e); }
 });
@@ -114,7 +114,7 @@ router.delete('/aid-requests/:id', auth('beneficiary'), async (req, res, next) =
        WHERE id=$1 AND beneficiary_id=$2 AND status='PENDING' RETURNING *`,
       [req.params.id, req.user.id]
     );
-    if (!result.rows[0]) return res.error('Cannot cancel this request', 400);
+    if (!result.rows[0]) return res.fail('Cannot cancel this request', 400);
     res.success({ message: 'Request cancelled' });
   } catch (e) { next(e); }
 });

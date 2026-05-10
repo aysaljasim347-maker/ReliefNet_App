@@ -38,7 +38,7 @@ router.get('/stats', auth('admin'), async (req, res, next) => {
         SELECT
           COUNT(*) as total_donations,
           COALESCE(SUM(amount), 0) as total_amount
-        FROM donations WHERE status='completed'
+        FROM donations WHERE status IN ('completed', 'VERIFIED')
       `)
     ]);
 
@@ -58,7 +58,7 @@ router.patch('/ngos/:id/approve', auth('admin'), async (req, res, next) => {
       `UPDATE ngo_profiles SET status='APPROVED', approved_by=$1, approved_at=NOW() WHERE id=$2 AND status='PENDING' RETURNING *`,
       [req.user.id, req.params.id]
     );
-    if (!result.rows[0]) return res.error('NGO not found or not pending', 404);
+    if (!result.rows[0]) return res.fail('NGO not found or not pending', 404);
     res.success(result.rows[0]);
   } catch (e) { next(e); }
 });
@@ -68,13 +68,13 @@ router.patch('/ngos/:id/reject', auth('admin'), async (req, res, next) => {
   try {
     const { reason } = req.body;
     if (!reason || reason.trim() === '') {
-      return res.error('Rejection reason required', 400);
+      return res.fail('Rejection reason required', 400);
     }
     const result = await db.query(
       `UPDATE ngo_profiles SET status='REJECTED', rejection_reason=$1 WHERE id=$2 AND status='PENDING' RETURNING *`,
       [reason.trim(), req.params.id]
     );
-    if (!result.rows[0]) return res.error('NGO not found or not pending', 404);
+    if (!result.rows[0]) return res.fail('NGO not found or not pending', 404);
     res.success(result.rows[0]);
   } catch (e) { next(e); }
 });
@@ -164,13 +164,13 @@ router.patch('/campaigns/:id/status', auth('admin'), async (req, res, next) => {
   try {
     const { status } = req.body;
     if (!['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'].includes(status)) {
-      return res.error('Invalid status', 400);
+      return res.fail('Invalid status', 400);
     }
     const result = await db.query(
       `UPDATE campaigns SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
       [status, req.params.id]
     );
-    if (!result.rows[0]) return res.error('Campaign not found', 404);
+    if (!result.rows[0]) return res.fail('Campaign not found', 404);
     res.success(result.rows[0]);
   } catch (e) { next(e); }
 });
@@ -179,7 +179,15 @@ router.patch('/campaigns/:id/status', auth('admin'), async (req, res, next) => {
 router.get('/analytics', auth('admin'), async (req, res, next) => {
   try {
     const { start_date, end_date } = req.query;
-    const dateFilter = start_date && end_date? `WHERE d.created_at BETWEEN '${start_date}' AND '${end_date}'` : '';
+    const params = [];
+    let dateFilter = '';
+    let donationDateFilter = '';
+
+    if (start_date && end_date) {
+      params.push(start_date, end_date);
+      dateFilter = `WHERE d.created_at BETWEEN $1 AND $2`;
+      donationDateFilter = `AND d.created_at BETWEEN $1 AND $2`;
+    }
 
     const [dailyDonations, topCampaigns, topNgos, categoryStats] = await Promise.all([
       db.query(`
@@ -187,7 +195,7 @@ router.get('/analytics', auth('admin'), async (req, res, next) => {
         FROM donations ${dateFilter}
         GROUP BY DATE(created_at)
         ORDER BY date DESC LIMIT 30
-      `),
+      `, params),
       db.query(`
         SELECT c.title, n.org_name, c.raised_amount, c.target_amount,
                COUNT(d.id) as donation_count
@@ -214,9 +222,9 @@ router.get('/analytics', auth('admin'), async (req, res, next) => {
         SELECT c.category, COUNT(d.id) as count, COALESCE(SUM(d.amount), 0) as total
         FROM donations d
         JOIN campaigns c ON d.campaign_id = c.id
-        ${dateFilter}
+        ${start_date && end_date ? 'WHERE d.created_at BETWEEN $1 AND $2' : ''}
         GROUP BY c.category
-      `)
+      `, start_date && end_date ? [start_date, end_date] : [])
     ]);
 
     res.success({
@@ -386,13 +394,13 @@ router.post('/reports', auth(), async (req, res, next) => {
       description: Joi.string().max(500).allow('', null),
     });
     const { error, value } = schema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
+    if (error) return res.fail(error.details[0].message, 400);
 
     const existing = await db.query(
       'SELECT id FROM reports WHERE reporter_id=$1 AND target_type=$2 AND target_id=$3 AND status=\'PENDING\'',
       [req.user.id, value.target_type, value.target_id]
     );
-    if (existing.rows[0]) return res.error('You already reported this', 400);
+    if (existing.rows[0]) return res.fail('You already reported this', 400);
 
     const result = await db.query(
       `INSERT INTO reports (reporter_id, target_type, target_id, reason, description)
@@ -433,14 +441,14 @@ router.patch('/reports/:id', auth('admin'), async (req, res, next) => {
       admin_notes: Joi.string().max(500).allow('', null),
     });
     const { error, value } = schema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
+    if (error) return res.fail(error.details[0].message, 400);
 
     const result = await db.query(
       `UPDATE reports SET status=$1, admin_notes=$2, reviewed_at=NOW(), reviewed_by=$3
        WHERE id=$4 RETURNING *`,
       [value.status, value.admin_notes, req.user.id, req.params.id]
     );
-    if (!result.rows[0]) return res.error('Report not found', 404);
+    if (!result.rows[0]) return res.fail('Report not found', 404);
     res.success(result.rows[0]);
   } catch (e) { next(e); }
 });
@@ -515,9 +523,10 @@ router.get('/delivered', auth('admin'), async (req, res, next) => {
   try {
     const result = await db.query(`
       SELECT ar.id, ar.delivery_proof_url, ar.delivered_at, ar.delivery_notes,
-             u.name as delivered_by_name, ar.beneficiary_name as victim_name, n.org_name
+             du.name as delivered_by_name, bu.name as victim_name, n.org_name
       FROM aid_requests ar
-      JOIN users u ON ar.delivered_by = u.id
+      JOIN users du ON ar.delivered_by = du.id
+      JOIN users bu ON ar.beneficiary_id = bu.id
       JOIN ngo_profiles n ON ar.ngo_id = n.id
       WHERE ar.status = 'DELIVERED'
       ORDER BY ar.delivered_at DESC

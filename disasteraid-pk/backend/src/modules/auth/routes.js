@@ -16,13 +16,13 @@ const registerSchema = Joi.object({
 router.post('/register', async (req, res, next) => {
   try {
     const { error, value } = registerSchema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
+    if (error) return res.fail(error.details[0].message, 400);
 
     const { email, phone, password, role, name } = value;
     const hash = await bcrypt.hash(password, 10);
 
     const roleRes = await db.query('SELECT id FROM roles WHERE name=$1', [role]);
-    if (!roleRes.rows[0]) return res.error('Invalid role', 400);
+    if (!roleRes.rows[0]) return res.fail('Invalid role', 400);
 
     const user = await db.query(
       'INSERT INTO users (email, phone, password_hash, role_id, name) VALUES ($1,$2,$3,$4,$5) RETURNING id,name,email,phone,role_id',
@@ -32,7 +32,7 @@ router.post('/register', async (req, res, next) => {
     const token = jwt.sign({ id: user.rows[0].id, role }, process.env.JWT_SECRET, { expiresIn: '24h' });
     res.success({ token, user: {...user.rows[0], role } }, 201);
   } catch (e) {
-    if (e.code === '23505') return res.error('Email or phone already exists', 409);
+    if (e.code === '23505') return res.fail('Email or phone already exists', 409);
     next(e);
   }
 });
@@ -46,7 +46,7 @@ router.post('/login', async (req, res, next) => {
     );
 
     if (!user.rows[0] ||!await bcrypt.compare(password, user.rows[0].password_hash)) {
-      return res.error('Invalid credentials', 401);
+      return res.fail('Invalid credentials', 401);
     }
 
     const token = jwt.sign({ id: user.rows[0].id, role: user.rows[0].role }, process.env.JWT_SECRET, { expiresIn: '24h' });
@@ -62,7 +62,7 @@ router.get('/me', auth(), async (req, res, next) => {
       'SELECT u.id, u.name, u.email, u.phone, u.locale, r.name as role FROM users u JOIN roles r ON u.role_id=r.id WHERE u.id=$1',
       [req.user.id]
     );
-    if (!user.rows[0]) return res.error('User not found', 404);
+    if (!user.rows[0]) return res.fail('User not found', 404);
     res.success(user.rows[0]);
   } catch (e) { next(e); }
 });

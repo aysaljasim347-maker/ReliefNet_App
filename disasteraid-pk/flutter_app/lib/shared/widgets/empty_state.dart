@@ -18,22 +18,36 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 80, color: Colors.grey[400]),
+            Icon(icon, size: 72, color: cs.onSurfaceVariant),
             const SizedBox(height: 16),
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
             if (subtitle!= null)...[
               const SizedBox(height: 8),
-              Text(subtitle!, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600])),
+              Text(
+                subtitle!,
+                textAlign: TextAlign.center,
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              ),
             ],
             if (onAction!= null && actionLabel!= null)...[
               const SizedBox(height: 24),
-              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+              FilledButton(
+                onPressed: onAction,
+                style: FilledButton.styleFrom(minimumSize: const Size(160, 48)),
+                child: Text(actionLabel!),
+              ),
             ],
           ],
         ),

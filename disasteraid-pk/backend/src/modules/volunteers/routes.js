@@ -16,12 +16,12 @@ const volunteerSchema = Joi.object({
 router.post('/register', auth('volunteer'), async (req, res, next) => {
   try {
     const { error, value } = volunteerSchema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
+    if (error) return res.fail(error.details[0].message, 400);
 
     const { ngo_id, location, skills, availability } = value;
 
     const ngo = await db.query('SELECT id FROM ngo_profiles WHERE id=$1 AND status=$2', [ngo_id, 'APPROVED']);
-    if (!ngo.rows[0]) return res.error('NGO not found or not approved', 400);
+    if (!ngo.rows[0]) return res.fail('NGO not found or not approved', 400);
 
     const result = await db.query(
       `INSERT INTO volunteer_profiles (user_id, ngo_id, location, skills, availability)
@@ -38,7 +38,7 @@ router.post('/register', auth('volunteer'), async (req, res, next) => {
 router.get('/tasks/available', auth('volunteer'), async (req, res, next) => {
   try {
     const vol = await db.query('SELECT * FROM volunteer_profiles WHERE user_id = $1', [req.user.id]);
-    if (!vol.rows[0]) return res.error('Complete volunteer profile first', 400);
+    if (!vol.rows[0]) return res.fail('Complete volunteer profile first', 400);
 
     const result = await db.query(`
       SELECT a.*, c.title as campaign_title, c.image_url,
@@ -113,11 +113,11 @@ router.patch('/tasks/:id/status', auth('volunteer'), upload.single('proof'), asy
   try {
     const { status } = req.body;
     if (!['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(status)) {
-      return res.error('Invalid status', 400);
+      return res.fail('Invalid status', 400);
     }
 
     const vol = await db.query('SELECT id FROM volunteer_profiles WHERE user_id = $1', [req.user.id]);
-    if (!vol.rows[0]) return res.error('Volunteer profile not found', 403);
+    if (!vol.rows[0]) return res.fail('Volunteer profile not found', 403);
 
     const proof_url = req.file? req.file.path : req.body.proof_url;
 
@@ -131,14 +131,9 @@ router.patch('/tasks/:id/status', auth('volunteer'), upload.single('proof'), asy
       [status, proof_url, req.params.id, vol.rows[0].id]
     );
 
-    if (!result.rows[0]) return res.error('Task not found or not assigned to you', 403);
+    if (!result.rows[0]) return res.fail('Task not found or not assigned to you', 403);
 
-    if (status === 'DELIVERED') {
-      await db.query(
-        `UPDATE volunteer_profiles SET completed_tasks = completed_tasks + 1 WHERE id = $1`,
-        [vol.rows[0].id]
-      );
-    }
+    // Note: completed_tasks is tracked via COUNT query in /stats, not a column
 
     res.success(result.rows[0]);
   } catch (e) { next(e); }

@@ -15,15 +15,19 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _isAuthenticated;
   Map<String, dynamic>? get user => _user;
 
+  AuthProvider() {
+    _api.onUnauthorized = logout;
+  }
+
   Future<void> checkAuth() async {
     _token = await _storage.read(key: 'token');
     if (_token != null) {
       try {
         final res = await _api.dio.get('/auth/me');
-        _user = res.data; // REMOVED ['data']
+        _user = Map<String, dynamic>.from(res.data as Map);
         _api.setCurrentUser(_user!);
         _isAuthenticated = true;
-      } on DioException catch (e) {
+      } on DioException {
         await _storage.delete(key: 'token');
         _api.clearCurrentUser();
         _isAuthenticated = false;
@@ -50,18 +54,17 @@ class AuthProvider extends ChangeNotifier {
       });
 
       final data = res.data; // Already unwrapped
-      _token = data['token'];
-      _user = data['user'];
+      _token = data['token']?.toString();
+      _user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
       _isAuthenticated = true;
       _api.setCurrentUser(_user!);
       await _storage.write(key: 'token', value: _token);
       notifyListeners();
     } on DioException catch (e) {
-      final apiErr = e.error as ApiException?;
       if (e.response?.statusCode == 409) {
-        throw apiErr?.message ?? 'Email or phone already exists';
+        throw ApiClient.messageFromError(e, 'Email or phone already exists');
       }
-      throw apiErr?.message ?? 'Registration failed';
+      throw ApiClient.messageFromError(e, 'Registration failed');
     }
   }
 
@@ -73,15 +76,14 @@ class AuthProvider extends ChangeNotifier {
       });
       
       final data = res.data; // Already unwrapped
-      _token = data['token'];
-      _user = data['user'];
+      _token = data['token']?.toString();
+      _user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
       _isAuthenticated = true;
       _api.setCurrentUser(_user!);
       await _storage.write(key: 'token', value: _token);
       notifyListeners();
     } on DioException catch (e) {
-      final apiErr = e.error as ApiException?;
-      throw apiErr?.message ?? 'Invalid credentials';
+      throw ApiClient.messageFromError(e, 'Invalid credentials');
     }
   }
 

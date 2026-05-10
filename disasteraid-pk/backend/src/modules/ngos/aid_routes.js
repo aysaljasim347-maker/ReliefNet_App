@@ -15,7 +15,7 @@ const updateRequestSchema = Joi.object({
 router.get('/aid-requests', auth('ngo'), async (req, res, next) => {
   try {
     const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
-    if (!ngo.rows[0]) return res.error('NGO profile not found', 400);
+    if (!ngo.rows[0]) return res.fail('NGO profile not found', 400);
 
     const { status } = req.query;
     let query = `
@@ -42,15 +42,15 @@ router.get('/aid-requests', auth('ngo'), async (req, res, next) => {
 router.patch('/aid-requests/:id', auth('ngo'), async (req, res, next) => {
   try {
     const { error, value } = updateRequestSchema.validate(req.body);
-    if (error) return res.error(error.details[0].message, 400);
+    if (error) return res.fail(error.details[0].message, 400);
 
     const { status, volunteer_id, rejection_reason } = value;
     const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
-    if (!ngo.rows[0]) return res.error('NGO profile not found', 400);
+    if (!ngo.rows[0]) return res.fail('NGO profile not found', 400);
 
     if (volunteer_id) {
       const vol = await db.query('SELECT id FROM volunteer_profiles WHERE id=$1 AND ngo_id=$2', [volunteer_id, ngo.rows[0].id]);
-      if (!vol.rows[0]) return res.error('Volunteer not found or not in your NGO', 400);
+      if (!vol.rows[0]) return res.fail('Volunteer not found or not in your NGO', 400);
     }
 
     const result = await db.query(
@@ -64,7 +64,7 @@ router.patch('/aid-requests/:id', auth('ngo'), async (req, res, next) => {
       [status, volunteer_id || null, rejection_reason || null, req.params.id, ngo.rows[0].id]
     );
 
-    if (!result.rows[0]) return res.error('Request not found or already processed', 400);
+    if (!result.rows[0]) return res.fail('Request not found or already processed', 400);
     res.success(result.rows[0]);
   } catch (e) { next(e); }
 });
@@ -105,7 +105,7 @@ router.get('/aid-requests/:id', auth('ngo'), async (req, res, next) => {
       WHERE a.id = $1 AND a.ngo_id = $2
     `, [req.params.id, ngo.rows[0].id]);
 
-    if (!result.rows[0]) return res.error('Request not found', 404);
+    if (!result.rows[0]) return res.fail('Request not found', 404);
     res.success(result.rows[0]);
   } catch (e) { next(e); }
 });
@@ -162,8 +162,8 @@ router.get('/:id/proof', auth(), async (req, res, next) => {
       WHERE ar.id = $1
     `, [req.params.id]);
 
-    if (!result.rows[0]) return res.error('Aid request not found', 404);
-    if (!result.rows[0].delivery_proof_url) return res.error('No delivery proof uploaded yet', 404);
+    if (!result.rows[0]) return res.fail('Aid request not found', 404);
+    if (!result.rows[0].delivery_proof_url) return res.fail('No delivery proof uploaded yet', 404);
 
     res.success(result.rows[0]);
   } catch (e) { next(e); }

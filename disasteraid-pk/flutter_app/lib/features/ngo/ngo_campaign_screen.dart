@@ -31,11 +31,12 @@ class _NgoCampaignsScreenState extends State<NgoCampaignsScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       final ngoRes = await _api.dio.get('/ngos/me');
-      final ngoId = ngoRes.data['id']; // ApiClient unwraps
+      final ngoId = (ngoRes.data as Map?)?['id']; // ApiClient unwraps
       final res = await _api.dio.get('/campaigns', queryParameters: {'ngo_id': ngoId});
       if (mounted) {
         setState(() {
-          _campaigns = (res.data as List).map((e) => Campaign.fromJson(e)).toList();
+          final rows = res.data is List ? res.data as List : const [];
+          _campaigns = rows.map((e) => Campaign.fromJson(Map<String, dynamic>.from(e as Map))).toList();
           _loading = false;
         });
       }
@@ -141,7 +142,7 @@ class _NgoCampaignsScreenState extends State<NgoCampaignsScreen> {
       itemCount: _campaigns.length,
       itemBuilder: (context, i) {
         final c = _campaigns[i];
-        final progress = (c.raisedAmount / c.targetAmount).clamp(0.0, 1.0);
+        final progress = c.targetAmount > 0 ? (c.raisedAmount / c.targetAmount).clamp(0.0, 1.0) : 0.0;
         final statusColor = _statusColor(c.status);
         final categoryColor = _categoryColor(c.category);
 

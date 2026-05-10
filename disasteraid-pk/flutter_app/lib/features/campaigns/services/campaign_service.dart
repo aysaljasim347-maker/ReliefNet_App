@@ -10,8 +10,8 @@ class CampaignService {
       final res = await _api.dio.get('/campaigns', queryParameters: {
         if (category != null) 'category': category,
       });
-      // res.data is already the List, not {data: [...]}
-      return (res.data as List).map((e) => Campaign.fromJson(e)).toList();
+      final rows = res.data is List ? res.data as List : const [];
+      return rows.map((e) => Campaign.fromJson(Map<String, dynamic>.from(e as Map))).toList();
     } on DioException catch (e) {
       throw e.error is ApiException ? e.error as ApiException : ApiException('Failed to load campaigns');
     }
@@ -20,7 +20,8 @@ class CampaignService {
   Future<List<Campaign>> getMyCampaigns() async {
     try {
       final res = await _api.dio.get('/campaigns/my');
-      return (res.data as List).map((e) => Campaign.fromJson(e)).toList();
+      final rows = res.data is List ? res.data as List : const [];
+      return rows.map((e) => Campaign.fromJson(Map<String, dynamic>.from(e as Map))).toList();
     } on DioException catch (e) {
       throw e.error is ApiException ? e.error as ApiException : ApiException('Failed to load your campaigns');
     }
@@ -29,7 +30,7 @@ class CampaignService {
   Future<Campaign> createCampaign(FormData formData) async {
     try {
       final res = await _api.dio.post('/campaigns', data: formData);
-      return Campaign.fromJson(res.data);
+      return Campaign.fromJson(Map<String, dynamic>.from(res.data as Map? ?? {}));
     } on DioException catch (e) {
       throw e.error is ApiException ? e.error as ApiException : ApiException('Failed to create campaign');
     }
@@ -38,7 +39,7 @@ class CampaignService {
   Future<Campaign> getCampaign(int id) async {
     try {
       final res = await _api.dio.get('/campaigns/$id');
-      return Campaign.fromJson(res.data);
+      return Campaign.fromJson(Map<String, dynamic>.from(res.data as Map? ?? {}));
     } on DioException catch (e) {
       throw e.error is ApiException ? e.error as ApiException : ApiException('Campaign not found');
     }
@@ -47,7 +48,7 @@ class CampaignService {
   Future<Campaign> updateCampaign(int id, FormData formData) async {
     try {
       final res = await _api.dio.put('/campaigns/$id', data: formData);
-      return Campaign.fromJson(res.data);
+      return Campaign.fromJson(Map<String, dynamic>.from(res.data as Map? ?? {}));
     } on DioException catch (e) {
       throw e.error is ApiException ? e.error as ApiException : ApiException('Failed to update campaign');
     }

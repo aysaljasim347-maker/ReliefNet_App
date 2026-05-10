@@ -19,7 +19,7 @@ class _DonateScreenState extends State<DonateScreen> {
   final _emailController = TextEditingController();
   final _api = ApiClient();
   bool _loading = false;
-  String _method = 'jazzcash';
+  String _method = 'JAZZCASH';
 
   @override
   void dispose() {
@@ -55,7 +55,8 @@ class _DonateScreenState extends State<DonateScreen> {
         );
       }
     } on DioException catch (e) {
-      final msg = e.response?.data['error']?? 'Donation failed';
+      final apiErr = e.error;
+      final msg = apiErr is ApiException ? apiErr.message : (e.message ?? 'Donation failed');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -127,8 +128,8 @@ class _DonateScreenState extends State<DonateScreen> {
                 labelText: 'Payment Method',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              items: ['jazzcash', 'easypaisa', 'bank_transfer', 'stripe']
-              .map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase())))
+              items: ['JAZZCASH', 'EASYPAISA', 'BANK_TRANSFER', 'STRIPE']
+              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                  .toList(),
               onChanged: (v) => setState(() => _method = v!),
             ),

@@ -119,17 +119,22 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        _api.dio.get('/aid-requests/my'),
-        _api.dio.get('/beneficiary/stats').catchError((_) => null),
-      ]);
+      final requestsRes = await _api.dio.get('/aid-requests/my');
+      dynamic statsData;
+      try {
+        final statsRes = await _api.dio.get('/beneficiary/stats');
+        statsData = statsRes.data;
+      } catch (_) {
+        statsData = null;
+      }
 
       if (mounted) {
         setState(() {
           // ApiClient unwraps {success, data} -> returns array
-          _myRequests = List<Map<String, dynamic>>.from(results[0].data);
-          if (results[1]!= null) {
-            _stats = results[1].data;
+          final rows = requestsRes.data is List ? requestsRes.data as List : const [];
+          _myRequests = rows.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          if (statsData is Map) {
+            _stats = Map<String, dynamic>.from(statsData);
           }
           _loading = false;
         });

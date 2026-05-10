@@ -1,5 +1,6 @@
 import 'package:disasteraid_pk/core/api/api_client.dart';
 import 'package:disasteraid_pk/core/auth/auth_provider.dart';
+import 'package:disasteraid_pk/core/settings/app_settings_provider.dart';
 import 'package:disasteraid_pk/core/services/socket_service.dart';
 import 'package:disasteraid_pk/features/admin/admin_dashboard.dart';
 import 'package:disasteraid_pk/features/auth/login_screen.dart';
@@ -31,15 +32,36 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuth()),
         ChangeNotifierProvider(create: (_) => ChatBadgeProvider()), // ADD THIS
+        ChangeNotifierProvider(create: (_) => AppSettingsProvider()),
       ],
-      child: Consumer<AuthProvider>(
-        builder: (context, auth, _) {
+      child: Consumer2<AuthProvider, AppSettingsProvider>(
+        builder: (context, auth, settings, _) {
           return MaterialApp(
             title: 'DisasterAid PK',
             theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+              colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B6B48)),
+              filledButtonTheme: FilledButtonThemeData(
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              ),
               useMaterial3: true,
             ),
+            darkTheme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF0B6B48),
+                brightness: Brightness.dark,
+              ),
+              filledButtonTheme: FilledButtonThemeData(
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              ),
+              useMaterial3: true,
+            ),
+            themeMode: settings.themeMode,
             debugShowCheckedModeBanner: false,
             initialRoute: auth.isAuthenticated ? '/' : '/login',
             routes: {
@@ -76,7 +98,7 @@ class _AppShellState extends State<AppShell> {
     if (user?['role'] == 'ngo') {
       _fetchNgoStatus();
     } else {
-      setState(() => _loadingStatus = false);
+      _loadingStatus = false;
     }
   }
 
@@ -91,16 +113,18 @@ class _AppShellState extends State<AppShell> {
       context.read<ChatBadgeProvider>().refreshUnread(); // ADD THIS
       
       SocketService().onNotification = (data) {
-        _scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(
-            content: Text(data['title'] ?? 'New notification'),
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'View',
-              onPressed: () {
-                // TODO: Navigate to notifications screen
-              },
-            ),
+        final messenger = _scaffoldMessengerKey.currentState;
+        messenger?.hideCurrentMaterialBanner();
+        messenger?.showMaterialBanner(
+          MaterialBanner(
+            leading: const Icon(Icons.notifications_active_outlined),
+            content: Text(data['title']?.toString() ?? 'New notification'),
+            actions: [
+              TextButton(
+                onPressed: () => messenger?.hideCurrentMaterialBanner(),
+                child: const Text('Dismiss'),
+              ),
+            ],
           ),
         );
       };
@@ -124,11 +148,13 @@ Future<void> _fetchNgoStatus() async {
   try {
     final api = ApiClient();
     final res = await api.dio.get('/ngos/me');
-    setState(() => _ngoStatus = res.data?['status']); // FIXED: removed ['data']
+    if (!mounted) return;
+    setState(() => _ngoStatus = (res.data as Map?)?['status']?.toString()); // FIXED: removed ['data']
   } catch (e) {
+    if (!mounted) return;
     setState(() => _ngoStatus = null);
   } finally {
-    setState(() => _loadingStatus = false);
+    if (mounted) setState(() => _loadingStatus = false);
   }
 }
   @override
@@ -136,7 +162,9 @@ Future<void> _fetchNgoStatus() async {
     final user = context.watch<AuthProvider>().user;
     final role = user?['role'];
 
-    if (_loadingStatus) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loadingStatus) {
+      return const Scaffold(body: Center(child: LinearProgressIndicator()));
+    }
 
     return ScaffoldMessenger(
       key: _scaffoldMessengerKey,
@@ -173,9 +201,9 @@ class NgoStatusScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (status == null)...[
-                const Icon(Icons.business, size: 80, color: Colors.green),
+                Icon(Icons.business, size: 80, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(height: 24),
-                const Text('Complete Your Profile', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text('Complete Your Profile', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 const Text('Submit documents to get verified', textAlign: TextAlign.center),
                 const SizedBox(height: 32),
@@ -185,19 +213,19 @@ class NgoStatusScreen extends StatelessWidget {
                   label: const Text('Start Verification'),
                 ),
               ] else if (status == 'PENDING')...[
-                const Icon(Icons.hourglass_top, size: 80, color: Colors.orange),
+                Icon(Icons.hourglass_top, size: 80, color: Theme.of(context).colorScheme.tertiary),
                 const SizedBox(height: 24),
-                const Text('Pending Approval', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text('Pending Approval', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 const Text('Admin is reviewing your documents', textAlign: TextAlign.center),
                 const SizedBox(height: 32),
                 OutlinedButton.icon(onPressed: onRefresh, icon: const Icon(Icons.refresh), label: const Text('Refresh Status')),
               ] else if (status == 'REJECTED')...[
-                const Icon(Icons.cancel, size: 80, color: Colors.red),
+                Icon(Icons.cancel, size: 80, color: Theme.of(context).colorScheme.error),
                 const SizedBox(height: 24),
-                const Text('Application Rejected', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text('Application Rejected', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text('Please resubmit with correct documents', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                Text('Please resubmit with correct documents', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 32),
                 FilledButton.icon(
                   onPressed: () => Navigator.pushNamed(context, '/ngo/onboard').then((_) => onRefresh()),

@@ -4,7 +4,7 @@ const db = require('../../config/db');
 const auth = require('../../middleware/auth');
 const upload = require('../../utils/upload');
 const Joi = require('joi');
-const cloudinary = require('../../utils/upload');
+const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 
 const campaignSchema = Joi.object({
@@ -37,12 +37,8 @@ router.post('/', auth('ngo'), upload.single('image'), async (req, res, next) => 
 
     let image_url = null;
     if (req.file) {
-      try {
-        const uploadResult = await cloudinary.uploader.upload(req.file.path, { folder: 'campaigns' });
-        image_url = uploadResult.secure_url;
-      } finally {
-        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      }
+      // CloudinaryStorage automatically uploads — req.file.path is the Cloudinary URL
+      image_url = req.file.path;
     }
 
     const result = await db.query(
@@ -204,12 +200,8 @@ router.put('/:id', auth('ngo'), upload.single('image'), async (req, res, next) =
 
     let image_url = req.body.image_url;
     if (req.file) {
-      try {
-        const uploadResult = await cloudinary.uploader.upload(req.file.path, { folder: 'campaigns' });
-        image_url = uploadResult.secure_url;
-      } finally {
-        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      }
+      // CloudinaryStorage automatically uploads — req.file.path is the Cloudinary URL
+      image_url = req.file.path;
     }
 
     const { title, description, category, target_amount, location, end_date, latitude, longitude, address } = value;

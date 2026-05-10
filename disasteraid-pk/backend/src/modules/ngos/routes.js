@@ -122,10 +122,10 @@ router.get('/dashboard/chart', auth('ngo'), async (req, res, next) => {
       JOIN campaigns c ON d.campaign_id = c.id
       WHERE c.ngo_id = $1
         AND d.status = 'VERIFIED'
-        AND d.verified_at >= NOW() - INTERVAL '${days} days'
+        AND d.verified_at >= NOW() - INTERVAL '1 day' * $2
       GROUP BY DATE(d.verified_at)
       ORDER BY date ASC
-    `, [ngo.rows[0].id]);
+    `, [ngo.rows[0].id, days]);
 
     res.success(result.rows);
   } catch (e) { next(e); }
