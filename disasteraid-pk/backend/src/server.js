@@ -228,8 +228,10 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
-    // Allow all localhost ports (Flutter web uses random ports)
-    if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+    // Allow all localhost ports and Android emulator loopback
+    if (origin.startsWith('http://localhost') || 
+        origin.startsWith('http://127.0.0.1') ||
+        origin.startsWith('http://10.0.2.2')) {
       return callback(null, true);
     }
     // Allow production origins from .env
@@ -239,11 +241,18 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['X-Request-Id'], // Crucial for client-side tracing
 }));
 
 // Handle preflight for all routes
 app.options('*', cors());
+
+// Force JSON Content-Type for all responses to prevent Flutter decode crashes
+app.use((req, res, next) => {
+  res.setHeader('Content-Type', 'application/json');
+  next();
+});
 
 // Request ID for tracing
 app.use((req, res, next) => {
@@ -345,22 +354,71 @@ app.use((req, res) => {
   res.fail('Route not found', 404);
 });
 
-// Global error handler
+// Global error handler - STANDARDIZED
 app.use((err, req, res, next) => {
   console.error(`[${req.id}] Error:`, err);
 
-  if (err.code === 'LIMIT_FILE_SIZE') return res.fail('File too large. Max 5MB', 413);
-  if (err.name === 'JsonWebTokenError') return res.fail('Invalid token', 401);
-  if (err.name === 'TokenExpiredError') return res.fail('Token expired', 401);
-  if (err.code === '23505') return res.fail('Resource already exists', 409);
-  if (err.code === '23503') return res.fail('Referenced resource not found', 400);
+  let statusCode = err.status || err.statusCode || 500;
+  let errorCode = 'SERVER_ERROR';
+  let message = err.message || 'An unexpected error occurred';
+  let details = err.details || [];
 
-  const status = err.status || err.statusCode || 500;
-  const message = process.env.NODE_ENV === 'production' && status === 500
-    ? 'Internal server error'
-    : err.message;
+  // Multer file errors
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    statusCode = 413;
+    errorCode = 'FILE_TOO_LARGE';
+    message = 'File size exceeds 5MB limit';
+  }
 
-  res.fail(message, status);
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    statusCode = 401;
+    errorCode = 'INVALID_TOKEN';
+    message = 'Authentication failed: Invalid token';
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    statusCode = 401;
+    errorCode = 'TOKEN_EXPIRED';
+    message = 'Session expired. Please log in again.';
+  }
+
+  // Postgres errors
+  if (err.code === '23505') {
+    statusCode = 409;
+    errorCode = 'DUPLICATE_RESOURCE';
+    message = 'A resource with this information already exists';
+  }
+
+  if (err.code === '23503') {
+    statusCode = 400;
+    errorCode = 'FOREIGN_KEY_VIOLATION';
+    message = 'Referenced resource not found';
+  }
+
+  // Joi Validation errors (extracted from Joi schema.validate)
+  if (err.isJoi) {
+    statusCode = 400;
+    errorCode = 'VALIDATION_FAILED';
+    message = 'Invalid request data';
+    details = err.details.map(d => ({
+      field: d.path[0],
+      message: d.message
+    }));
+  }
+
+  // Hide detailed errors in production
+  if (process.env.NODE_ENV === 'production' && statusCode === 500) {
+    message = 'Internal server error';
+  }
+
+  res.status(statusCode).json({
+    success: false,
+    error: errorCode,
+    message: message,
+    details: details,
+    requestId: req.id
+  });
 });
 
 // Start server

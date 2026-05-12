@@ -38,7 +38,11 @@ class ApiClient {
     if (kIsWeb) {
       defaultUrl = 'http://localhost:3000/api';
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      defaultUrl = 'http://10.109.20.48:3000/api';
+      // 10.0.2.2 is the special alias to your host loopback interface
+      defaultUrl = 'http://10.0.2.2:3000/api';
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // iOS Simulator uses localhost
+      defaultUrl = 'http://localhost:3000/api';
     } else {
       defaultUrl = 'http://localhost:3000/api';
     }

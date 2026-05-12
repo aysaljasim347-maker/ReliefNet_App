@@ -30,10 +30,11 @@ router.post('/', auth('donor'), async (req, res, next) => {
     if (error) return res.fail(error.details[0].message, 400);
 
     try {
+        // Secure Geospatial Insert: longitude before latitude in MakePoint
         const result = await db.query(
             `INSERT INTO in_kind_donations
-         (donor_id, title, description, image_url, location, latitude, longitude, expires_at, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'available')
+         (donor_id, title, description, image_url, location, latitude, longitude, geom, expires_at, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($7, $6), 4326), $8, 'available')
        RETURNING *`,
             [
                 req.user.id,
@@ -48,6 +49,32 @@ router.post('/', auth('donor'), async (req, res, next) => {
         );
 
         res.success(result.rows[0], 201);
+    } catch (e) {
+        next(e);
+    }
+});
+
+// GET /api/in-kind/nearby?lat=31.5&lng=74.3&radius=50
+// SPATIAL SEARCH: Find donations within X kilometers (default 50km)
+router.get('/nearby', async (req, res, next) => {
+    try {
+        const { lat, lng, radius = 50 } = req.query;
+        if (!lat || !lng) return res.fail('Latitude and longitude required', 400);
+
+        // ST_DWithin on geography(geom) ensures distances are in meters across the globe
+        const result = await db.query(
+            `SELECT d.*, u.name as donor_name,
+              ST_Distance(d.geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) / 1000 AS distance_km
+       FROM in_kind_donations d
+       JOIN users u ON u.id = d.donor_id
+       WHERE d.status = 'available'
+         AND ST_DWithin(d.geom::geography, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3 * 1000)
+       ORDER BY distance_km ASC
+       LIMIT 50`,
+            [lat, lng, radius]
+        );
+
+        res.success(result.rows);
     } catch (e) {
         next(e);
     }
@@ -184,23 +211,26 @@ router.post(
                 }
             );
 
-            // Notify all rejected beneficiaries
+            // Notify all rejected beneficiaries in parallel (Optimized)
             const rejectedRes = await db.query(
                 `SELECT r.beneficiary_id FROM in_kind_requests r
          WHERE r.donation_id = $1 AND r.status = 'rejected'`,
                 [req.params.donationId]
             );
-            for (const row of rejectedRes.rows) {
-                await createNotification(
+            
+            const rejectionNotifications = rejectedRes.rows.map(row => 
+                createNotification(
                     row.beneficiary_id,
                     'Request not selected',
                     `Unfortunately your request for "${donation.title}" was not selected this time.`,
                     'in_kind_rejected',
                     { donation_id: donation.id }
-                );
-            }
+                )
+            );
+            
+            await Promise.all(rejectionNotifications);
 
-            res.success({ message: 'Request approved, beneficiary notified' });
+            res.success({ message: 'Request approved, beneficiaries notified' });
         } catch (e) {
             await client.query('ROLLBACK');
             next(e);

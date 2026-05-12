@@ -128,6 +128,23 @@ router.patch('/admin/withdrawals/:id', auth('admin'), upload.single('proof'), as
       const wallet = await client.query(`SELECT balance FROM ngo_wallets WHERE ngo_id = $1 FOR UPDATE`, [withdrawal.ngo_id]);
       if (parseFloat(wallet.rows[0].balance) < parseFloat(withdrawal.amount)) throw new Error('Insufficient wallet balance');
 
+      // 1. Double-Entry Ledger Entry
+      const idempotencyKey = `complete_withdrawal_${withdrawal.id}`;
+      await client.query(`
+        INSERT INTO wallet_transactions (
+          transaction_type, amount, source_id, destination_id, 
+          withdrawal_id, idempotency_key, description
+        ) VALUES ('WITHDRAWAL', $1, $2, NULL, $3, $4, $5)
+        ON CONFLICT (idempotency_key) DO NOTHING
+      `, [
+        withdrawal.amount, 
+        withdrawal.ngo_id, 
+        withdrawal.id, 
+        idempotencyKey,
+        `Withdrawal Completed: ${withdrawal.bank_name}`
+      ]);
+
+      // 2. Update Balance
       await client.query(`UPDATE ngo_wallets SET balance = balance - $1, total_withdrawn = total_withdrawn + $1 WHERE ngo_id = $2`,
         [withdrawal.amount, withdrawal.ngo_id]);
     }

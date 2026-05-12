@@ -22,8 +22,11 @@ const campaignSchema = Joi.object({
 // POST /api/campaigns - Create campaign
 router.post('/', auth('ngo'), upload.single('image'), async (req, res, next) => {
   try {
-    const { error, value } = campaignSchema.validate(req.body);
-    if (error) return res.fail(error.details[0].message, 400);
+    const { error, value } = campaignSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      error.isJoi = true;
+      return next(error);
+    }
 
     const { title, description, category, target_amount, location, end_date, latitude, longitude, address } = value;
 
@@ -55,6 +58,12 @@ router.post('/', auth('ngo'), upload.single('image'), async (req, res, next) => 
 router.get('/', async (req, res, next) => {
   try {
     const { ngo_id, status, category } = req.query;
+    
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
     let query = `
       SELECT
         c.*,
@@ -74,6 +83,10 @@ router.get('/', async (req, res, next) => {
     if (category) { params.push(category); query += ` AND c.category = $${params.length}`; }
 
     query += ' GROUP BY c.id, n.id, u.id ORDER BY c.created_at DESC';
+
+    // Apply pagination
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, offset);
 
     const result = await db.query(query, params);
     res.success(result.rows);
@@ -192,8 +205,11 @@ router.get('/:id', async (req, res, next) => {
 // PUT /api/campaigns/:id - NGO edits own campaign
 router.put('/:id', auth('ngo'), upload.single('image'), async (req, res, next) => {
   try {
-    const { error, value } = campaignSchema.validate(req.body);
-    if (error) return res.fail(error.details[0].message, 400);
+    const { error, value } = campaignSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      error.isJoi = true;
+      return next(error);
+    }
 
     const ngo = await db.query('SELECT id FROM ngo_profiles WHERE user_id = $1', [req.user.id]);
     if (!ngo.rows[0]) return res.fail('NGO profile not found', 403);

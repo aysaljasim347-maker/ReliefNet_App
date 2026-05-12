@@ -284,7 +284,24 @@ router.patch('/:id/verify', auth('admin'), async (req, res, next) => {
     let receiptUrl = null;
 
     if (status === 'VERIFIED') {
-      // Update NGO wallet
+      // 1. Double-Entry Ledger Entry (using idempotency_key)
+      const idempotencyKey = `verify_donation_${donation.id}`;
+      await client.query(`
+        INSERT INTO wallet_transactions (
+          transaction_type, amount, source_id, destination_id, 
+          donation_id, idempotency_key, description
+        ) VALUES ('DONATION', $1, $2, $3, $4, $5, $6)
+        ON CONFLICT (idempotency_key) DO NOTHING
+      `, [
+        donation.amount, 
+        donation.user_id, 
+        donation.ngo_profile_id, 
+        donation.id, 
+        idempotencyKey,
+        `Manual Donation Verified: ${donation.campaign_title}`
+      ]);
+
+      // 2. Update NGO wallet balance
       await client.query(`
         INSERT INTO ngo_wallets (ngo_id, balance, total_received)
         VALUES ($1, $2, $2)
@@ -294,7 +311,7 @@ router.patch('/:id/verify', auth('admin'), async (req, res, next) => {
           updated_at = NOW()
       `, [donation.ngo_profile_id, donation.amount]);
 
-      // Update campaign raised_amount
+      // 3. Update campaign raised_amount
       await client.query(`
         UPDATE campaigns
         SET raised_amount = raised_amount + $1,

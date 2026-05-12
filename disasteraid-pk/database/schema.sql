@@ -419,6 +419,11 @@ CREATE INDEX idx_in_kind_donations_status  ON public.in_kind_donations (status);
 CREATE INDEX idx_in_kind_requests_donation ON public.in_kind_requests (donation_id);
 CREATE INDEX idx_in_kind_requests_beneficiary ON public.in_kind_requests (beneficiary_id);
 
+-- New Performance Indexes (Added based on handoff audit)
+CREATE INDEX idx_messages_sender           ON public.messages (sender_id);
+CREATE INDEX idx_ngo_profiles_approved     ON public.ngo_profiles (approved_by);
+CREATE INDEX idx_donations_verified        ON public.donations (verified_by);
+
 -- ============================================================
 -- TRIGGERS
 -- ============================================================
