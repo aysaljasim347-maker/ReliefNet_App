@@ -130,8 +130,8 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
   }
 
   Widget _buildPendingScreen(ColorScheme cs, TextTheme tt) {
-    return Scaffold(
-      body: Center(
+    return SafeArea(
+      child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -153,11 +153,11 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: cs.surfaceVariant,
+                  color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _ngoProfile!['org_name']?? '',
+                  _ngoProfile!['org_name'] ?? '',
                   style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -179,8 +179,8 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
 
   Widget _buildRejectedScreen(ColorScheme cs, TextTheme tt) {
     final reason = _ngoProfile!['rejection_reason'];
-    return Scaffold(
-      body: Center(
+    return SafeArea(
+      child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -193,11 +193,11 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
                 style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              if (reason!= null)...[
+              if (reason != null) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.red[50],
+                    color: Colors.red.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(

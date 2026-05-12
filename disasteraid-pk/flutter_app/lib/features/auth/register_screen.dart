@@ -95,11 +95,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Create Account')),
-      body: Form(
-        key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        top: false,
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             Text('Join DisasterAid PK', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -225,6 +227,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 : const Text('Create Account', style: TextStyle(fontSize: 16)),
             ),
           ],
+          ),
         ),
       ),
     );

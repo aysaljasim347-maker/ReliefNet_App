@@ -95,10 +95,12 @@ class _NgoOnboardScreenState extends State<NgoOnboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('NGO Verification')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
+      body: SafeArea(
+        top: false,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           children: [
             Text('Organization Details', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
@@ -180,6 +182,7 @@ class _NgoOnboardScreenState extends State<NgoOnboardScreen> {
               child: _loading? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Submit for Approval', style: TextStyle(fontSize: 16))
             ),
           ],
+          ),
         ),
       ),
     );

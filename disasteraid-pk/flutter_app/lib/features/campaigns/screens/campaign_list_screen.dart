@@ -34,6 +34,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
   String _sort = 'funded';
   String _query = '';
   String _location = '';
+  bool _showFilters = false; // collapsible filter panel
 
   final List<Map<String, dynamic>> _categories = const [
     {'key': null, 'label': 'All', 'icon': Icons.apps},
@@ -150,36 +151,48 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildFilters(tt),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _load,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: _buildBody(),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            _buildFilters(tt),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: _buildBody(),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildFilters(TextTheme tt) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Search bar – always visible
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
               labelText: 'Search campaigns',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _query.isEmpty
-                  ? null
+                  ? IconButton(
+                      tooltip: 'Toggle filters',
+                      icon: Icon(
+                        _showFilters ? Icons.filter_list_off : Icons.filter_list,
+                        color: _showFilters ? cs.primary : null,
+                      ),
+                      onPressed: () => setState(() => _showFilters = !_showFilters),
+                    )
                   : IconButton(
                       tooltip: 'Clear search',
                       icon: const Icon(Icons.close),
@@ -189,61 +202,76 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
             ),
             textInputAction: TextInputAction.search,
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _locationController,
-            decoration: InputDecoration(
-              labelText: 'Filter by city or province',
-              prefixIcon: const Icon(Icons.location_on_outlined),
-              suffixIcon: _location.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Clear location',
-                      icon: const Icon(Icons.close),
-                      onPressed: _locationController.clear,
-                    ),
-              border: const OutlineInputBorder(),
+        ),
+        // Collapsible extra filters
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 250),
+          crossFadeState: _showFilters ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          firstChild: const SizedBox(height: 8),
+          secondChild: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _locationController,
+                  decoration: InputDecoration(
+                    labelText: 'Filter by city or province',
+                    prefixIcon: const Icon(Icons.location_on_outlined),
+                    suffixIcon: _location.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear location',
+                            icon: const Icon(Icons.close),
+                            onPressed: _locationController.clear,
+                          ),
+                    border: const OutlineInputBorder(),
+                  ),
+                  textInputAction: TextInputAction.search,
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: _sort,
+                  decoration: const InputDecoration(
+                    labelText: 'Sort',
+                    prefixIcon: Icon(Icons.sort),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'funded', child: Text('% funded')),
+                    DropdownMenuItem(value: 'ending', child: Text('Ending soon')),
+                    DropdownMenuItem(value: 'newest', child: Text('Newest')),
+                  ],
+                  onChanged: (value) => setState(() => _sort = value ?? 'funded'),
+                ),
+                const SizedBox(height: 10),
+                Text('Category', style: tt.labelLarge),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: _categories.map((cat) {
+                    final key = cat['key'] as String?;
+                    final selected = _selectedCategory == key;
+                    return FilterChip(
+                      avatar: Icon(cat['icon'] as IconData, size: 16),
+                      label: Text(cat['label'] as String),
+                      selected: selected,
+                      showCheckmark: false,
+                      onSelected: (_) {
+                        setState(() => _selectedCategory = key);
+                        _load();
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            textInputAction: TextInputAction.search,
           ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _sort,
-            decoration: const InputDecoration(
-              labelText: 'Sort',
-              prefixIcon: Icon(Icons.sort),
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'funded', child: Text('% funded')),
-              DropdownMenuItem(value: 'ending', child: Text('Ending soon')),
-              DropdownMenuItem(value: 'newest', child: Text('Newest')),
-            ],
-            onChanged: (value) => setState(() => _sort = value ?? 'funded'),
-          ),
-          const SizedBox(height: 12),
-          Text('Category', style: tt.labelLarge),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _categories.map((cat) {
-              final key = cat['key'] as String?;
-              final selected = _selectedCategory == key;
-              return FilterChip(
-                avatar: Icon(cat['icon'] as IconData, size: 18),
-                label: Text(cat['label'] as String),
-                selected: selected,
-                showCheckmark: false,
-                onSelected: (_) {
-                  setState(() => _selectedCategory = key);
-                  _load();
-                },
-              );
-            }).toList(),
-          ),
-        ],
-      ),
+        ),
+        const Divider(height: 1),
+      ],
     );
   }
 

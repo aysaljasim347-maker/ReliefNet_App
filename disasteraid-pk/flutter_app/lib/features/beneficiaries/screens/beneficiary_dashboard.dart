@@ -1,7 +1,9 @@
+import 'package:disasteraid_pk/features/beneficiaries/beneficiary_my_request_screen.dart';
 import 'package:disasteraid_pk/features/beneficiaries/screens/beneficiary_map_screen.dart';
 import 'package:disasteraid_pk/features/chat/screens/chat_screen.dart';
 import 'package:disasteraid_pk/features/chat/screens/chat_list_screen.dart';
 import 'package:disasteraid_pk/features/chat/screens/services/chat_badge_provider.dart';
+import 'package:disasteraid_pk/features/in_kind/screens/in_kind_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -11,6 +13,7 @@ import '../../../core/api/api_client.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 import 'request_aid_screen.dart';
+import 'package:flutter/services.dart';
 
 class BeneficiaryDashboard extends StatefulWidget {
   const BeneficiaryDashboard({super.key});
@@ -23,6 +26,8 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
 
   final List<Widget> _screens = [
     const MyRequestsTab(),
+    const InKindListScreen(), // ← Step 9: Browse in-kind donations
+    const BeneficiaryMyRequestsScreen(),
     const BeneficiaryMapScreen(),
     const ChatListScreen(),
     const BeneficiaryProfileTab(),
@@ -32,68 +37,86 @@ class _BeneficiaryDashboardState extends State<BeneficiaryDashboard> {
   Widget build(BuildContext context) {
     final unreadCount = context.watch<ChatBadgeProvider>().unreadCount;
 
-    return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: _screens,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.list_alt_outlined),
-            selectedIcon: Icon(Icons.list_alt),
-            label: 'Requests',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unreadCount > 0,
-              label: Text('$unreadCount'),
-              child: const Icon(Icons.chat_bubble_outline),
+    return SafeArea(
+      child: Scaffold(
+        body: IndexedStack(
+          index: _index,
+          children: _screens,
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
+          destinations: [
+            const NavigationDestination(
+              icon: Icon(Icons.list_alt_outlined),
+              selectedIcon: Icon(Icons.list_alt),
+              label: 'Requests',
             ),
-            selectedIcon: Badge(
-              isLabelVisible: unreadCount > 0,
-              label: Text('$unreadCount'),
-              child: const Icon(Icons.chat_bubble),
+            // ── NEW: In-Kind donations tab ──
+            const NavigationDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              selectedIcon: Icon(Icons.inventory_2),
+              label: 'In-Kind',
             ),
-            label: 'Chat',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+            // NEW TAB
+            const NavigationDestination(
+              icon: Icon(Icons.inbox_outlined),
+              selectedIcon: Icon(Icons.inbox),
+              label: 'My Requests',
+            ),
+
+            const NavigationDestination(
+              icon: Icon(Icons.map_outlined),
+              selectedIcon: Icon(Icons.map),
+              label: 'Map',
+            ),
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unreadCount > 0,
+                label: Text('$unreadCount'),
+                child: const Icon(Icons.chat_bubble_outline),
+              ),
+              selectedIcon: Badge(
+                isLabelVisible: unreadCount > 0,
+                label: Text('$unreadCount'),
+                child: const Icon(Icons.chat_bubble),
+              ),
+              label: 'Chat',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
+        floatingActionButton: _index == 0
+            ? FloatingActionButton.extended(
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const RequestAidScreen(campaignId: null),
+                    ),
+                  );
+                  if (result == true && mounted) {
+                    final tabState =
+                        context.findAncestorStateOfType<_MyRequestsTabState>();
+                    tabState?._loadRequests();
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Request Aid'),
+              )
+            : null,
       ),
-      floatingActionButton: _index == 0
-      ? FloatingActionButton.extended(
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const RequestAidScreen(campaignId: null),
-                  ),
-                );
-                if (result == true && mounted) {
-                  // Trigger refresh in MyRequestsTab
-                  final tabState = context.findAncestorStateOfType<_MyRequestsTabState>();
-                  tabState?._loadRequests();
-                }
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Request Aid'),
-            )
-          : null,
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// My Requests Tab
+// ─────────────────────────────────────────────────────────────
 class MyRequestsTab extends StatefulWidget {
   const MyRequestsTab({super.key});
   @override
@@ -130,9 +153,10 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
 
       if (mounted) {
         setState(() {
-          // ApiClient unwraps {success, data} -> returns array
-          final rows = requestsRes.data is List ? requestsRes.data as List : const [];
-          _myRequests = rows.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          final rows =
+              requestsRes.data is List ? requestsRes.data as List : const [];
+          _myRequests =
+              rows.map((e) => Map<String, dynamic>.from(e as Map)).toList();
           if (statsData is Map) {
             _stats = Map<String, dynamic>.from(statsData);
           }
@@ -222,7 +246,8 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
 
   Widget _buildBody(ColorScheme cs, TextTheme tt, Map<String, dynamic>? user) {
     if (_loading) return _buildShimmer();
-    if (_error!= null) return ErrorState(message: _error!, onRetry: _loadRequests);
+    if (_error != null)
+      return ErrorState(message: _error!, onRetry: _loadRequests);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -232,7 +257,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [cs.secondary, cs.secondary.withOpacity(0.8)],
+              colors: [cs.secondary, cs.secondary.withValues(alpha: 0.85)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -243,11 +268,12 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
             children: [
               Text(
                 'Welcome,',
-                style: tt.titleMedium?.copyWith(color: cs.onSecondary.withOpacity(0.9)),
+                style: tt.titleMedium
+                    ?.copyWith(color: cs.onSecondary.withOpacity(0.9)),
               ),
               const SizedBox(height: 4),
               Text(
-                user?['name']?? 'Beneficiary',
+                user?['name'] ?? 'Beneficiary',
                 style: tt.headlineSmall?.copyWith(
                   color: cs.onSecondary,
                   fontWeight: FontWeight.bold,
@@ -260,11 +286,53 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
                   const SizedBox(width: 8),
                   Text(
                     'We are here to help you',
-                    style: tt.bodyMedium?.copyWith(color: cs.onSecondary.withOpacity(0.9)),
+                    style: tt.bodyMedium
+                        ?.copyWith(color: cs.onSecondary.withOpacity(0.9)),
                   ),
                 ],
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ── In-Kind banner ────────────────────────────────────
+        InkWell(
+          onTap: () {
+            final state =
+                context.findAncestorStateOfType<_BeneficiaryDashboardState>();
+            state?.setState(() => state._index = 1);
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.teal.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.teal.withOpacity(0.4)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.inventory_2_outlined,
+                    color: Colors.teal, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('In-Kind Donations Available',
+                          style: tt.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Browse goods, food & clothing near you',
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios,
+                    size: 16, color: Colors.teal),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 24),
@@ -275,7 +343,12 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
             Expanded(
               child: _StatCard(
                 label: 'Active',
-                value: '${_stats['active_requests']?? _myRequests.where((r) => ['PENDING', 'APPROVED', 'ASSIGNED'].contains(r['status'])).length}',
+                value:
+                    '${_stats['active_requests'] ?? _myRequests.where((r) => [
+                          'PENDING',
+                          'APPROVED',
+                          'ASSIGNED'
+                        ].contains(r['status'])).length}',
                 icon: Icons.pending_actions,
                 color: Colors.orange,
               ),
@@ -284,7 +357,11 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
             Expanded(
               child: _StatCard(
                 label: 'Fulfilled',
-                value: '${_stats['fulfilled_requests']?? _myRequests.where((r) => ['FULFILLED', 'DELIVERED'].contains(r['status'])).length}',
+                value:
+                    '${_stats['fulfilled_requests'] ?? _myRequests.where((r) => [
+                          'FULFILLED',
+                          'DELIVERED'
+                        ].contains(r['status'])).length}',
                 icon: Icons.check_circle,
                 color: Colors.green,
               ),
@@ -293,7 +370,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
             Expanded(
               child: _StatCard(
                 label: 'Total',
-                value: '${_stats['total_requests']?? _myRequests.length}',
+                value: '${_stats['total_requests'] ?? _myRequests.length}',
                 icon: Icons.inventory,
                 color: Colors.blue,
               ),
@@ -326,11 +403,11 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
             actionLabel: 'Request Aid',
           )
         else
-         ..._myRequests.map((r) => _RequestCard(
-            request: r,
-            statusColor: _statusColor(r['status']),
-            urgencyColor: _urgencyColor(r['urgency']),
-          )),
+          ..._myRequests.map((r) => _RequestCard(
+                request: r,
+                statusColor: _statusColor(r['status']),
+                urgencyColor: _urgencyColor(r['urgency']),
+              )),
       ],
     );
   }
@@ -342,29 +419,45 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
         Shimmer.fromColors(
           baseColor: Colors.grey[300]!,
           highlightColor: Colors.grey[100]!,
-          child: Container(height: 120, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          ),
         ),
         const SizedBox(height: 24),
         Row(
-          children: List.generate(3, (i) => Expanded(
-            child: Container(
-              height: 80,
-              margin: EdgeInsets.only(right: i < 2? 12 : 0),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          children: List.generate(
+            3,
+            (i) => Expanded(
+              child: Container(
+                height: 80,
+                margin: EdgeInsets.only(right: i < 2 ? 12 : 0),
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-          )),
+          ),
         ),
         const SizedBox(height: 24),
-       ...List.generate(3, (_) => Container(
-          height: 140,
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-        )),
+        ...List.generate(
+          3,
+          (_) => Container(
+            height: 140,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
       ],
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Stat Card
+// ─────────────────────────────────────────────────────────────
 class _StatCard extends StatelessWidget {
   final String label;
   final String value;
@@ -384,28 +477,34 @@ class _StatCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: color, size: 24),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: tt.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: tt.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -413,6 +512,9 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Request Card
+// ─────────────────────────────────────────────────────────────
 class _RequestCard extends StatelessWidget {
   final Map request;
   final Color statusColor;
@@ -428,10 +530,10 @@ class _RequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final items = (request['items_needed'] as List?)?.join(', ')?? 'Aid';
+    final items = (request['items_needed'] as List?)?.join(', ') ?? 'Aid';
     final status = request['status'];
-    final canChat = request['volunteer_name']!= null &&
-      ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'IN_PROGRESS'].contains(status);
+    final canChat = request['volunteer_name'] != null &&
+        ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'IN_PROGRESS'].contains(status);
     final dateFormat = DateFormat('dd MMM yyyy');
 
     return Card(
@@ -444,15 +546,15 @@ class _RequestCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          // Urgency Bar
           Container(height: 4, color: urgencyColor),
           ExpansionTile(
             leading: CircleAvatar(
               backgroundColor: statusColor.withOpacity(0.15),
-              child: Icon(Icons.inventory_2_outlined, color: statusColor, size: 20),
+              child: Icon(Icons.inventory_2_outlined,
+                  color: statusColor, size: 20),
             ),
             title: Text(
-              request['campaign_title']?? 'General Request',
+              request['campaign_title'] ?? 'General Request',
               style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             subtitle: Column(
@@ -466,14 +568,18 @@ class _RequestCard extends StatelessWidget {
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                          color: statusColor, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 6),
-                    Text(status, style: tt.labelSmall?.copyWith(color: statusColor, fontWeight: FontWeight.w600)),
+                    Text(status,
+                        style: tt.labelSmall?.copyWith(
+                            color: statusColor, fontWeight: FontWeight.w600)),
                     const SizedBox(width: 12),
                     Text(
                       'Urgency: ${request['urgency']}',
-                      style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                      style:
+                          tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -487,30 +593,44 @@ class _RequestCard extends StatelessWidget {
                   children: [
                     const Divider(height: 1),
                     const SizedBox(height: 16),
-                    if (request['volunteer_name']!= null)...[
-                      _detailRow(context, Icons.person_outline, 'Assigned Volunteer', request['volunteer_name']),
+                    if (request['volunteer_name'] != null) ...[
+                      _detailRow(context, Icons.person_outline,
+                          'Assigned Volunteer', request['volunteer_name']),
                       const SizedBox(height: 12),
-                      _detailRow(context, Icons.phone_outlined, 'Contact', request['volunteer_phone']?? 'N/A'),
+                      _detailRow(context, Icons.phone_outlined, 'Contact',
+                          request['volunteer_phone'] ?? 'N/A'),
                       const SizedBox(height: 12),
                     ],
-                    _detailRow(context, Icons.description_outlined, 'Description', request['description']?? 'No description'),
+                    _detailRow(
+                        context,
+                        Icons.description_outlined,
+                        'Description',
+                        request['description'] ?? 'No description'),
                     const SizedBox(height: 12),
-                    _detailRow(context, Icons.people_outline, 'Family Size', '${request['family_size']}'),
+                    _detailRow(context, Icons.people_outline, 'Family Size',
+                        '${request['family_size']}'),
                     const SizedBox(height: 12),
-                    _detailRow(context, Icons.calendar_today_outlined, 'Requested', dateFormat.format(DateTime.parse(request['created_at']))),
-                    if (request['rejection_reason']!= null)...[
+                    _detailRow(
+                        context,
+                        Icons.calendar_today_outlined,
+                        'Requested',
+                        dateFormat
+                            .format(DateTime.parse(request['created_at']))),
+                    if (request['rejection_reason'] != null) ...[
                       const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.red.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          border:
+                              Border.all(color: Colors.red.withOpacity(0.3)),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.info_outline, color: Colors.red[700], size: 20),
+                            Icon(Icons.info_outline,
+                                color: Colors.red[700], size: 20),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -518,10 +638,13 @@ class _RequestCard extends StatelessWidget {
                                 children: [
                                   Text(
                                     'Rejection Reason',
-                                    style: tt.labelMedium?.copyWith(color: Colors.red[700], fontWeight: FontWeight.bold),
+                                    style: tt.labelMedium?.copyWith(
+                                        color: Colors.red[700],
+                                        fontWeight: FontWeight.bold),
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(request['rejection_reason'], style: tt.bodySmall),
+                                  Text(request['rejection_reason'],
+                                      style: tt.bodySmall),
                                 ],
                               ),
                             ),
@@ -529,7 +652,7 @@ class _RequestCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (canChat)...[
+                    if (canChat) ...[
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -540,7 +663,8 @@ class _RequestCard extends StatelessWidget {
                               MaterialPageRoute(
                                 builder: (_) => ChatScreen(
                                   requestId: request['id'],
-                                  otherUserName: request['volunteer_name']?? 'Volunteer',
+                                  otherUserName:
+                                      request['volunteer_name'] ?? 'Volunteer',
                                 ),
                               ),
                             );
@@ -548,7 +672,8 @@ class _RequestCard extends StatelessWidget {
                           icon: const Icon(Icons.chat_outlined),
                           label: const Text('Chat with Volunteer'),
                           style: OutlinedButton.styleFrom(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
@@ -563,7 +688,8 @@ class _RequestCard extends StatelessWidget {
     );
   }
 
-  Widget _detailRow(BuildContext context, IconData icon, String label, String value) {
+  Widget _detailRow(
+      BuildContext context, IconData icon, String label, String value) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -576,15 +702,11 @@ class _RequestCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
+              Text(label,
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
               const SizedBox(height: 2),
-              Text(
-                value,
-                style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-              ),
+              Text(value,
+                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -593,6 +715,9 @@ class _RequestCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Profile Tab
+// ─────────────────────────────────────────────────────────────
 class BeneficiaryProfileTab extends StatelessWidget {
   const BeneficiaryProfileTab({super.key});
 
@@ -610,7 +735,6 @@ class BeneficiaryProfileTab extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Profile Header
           Center(
             child: Column(
               children: [
@@ -618,7 +742,7 @@ class BeneficiaryProfileTab extends StatelessWidget {
                   radius: 48,
                   backgroundColor: cs.secondaryContainer,
                   child: Text(
-                    user?['name']?[0].toUpperCase()?? 'B',
+                    user?['name']?[0].toUpperCase() ?? 'B',
                     style: tt.headlineLarge?.copyWith(
                       color: cs.onSecondaryContainer,
                       fontWeight: FontWeight.bold,
@@ -627,12 +751,13 @@ class BeneficiaryProfileTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  user?['name']?? 'Beneficiary',
-                  style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  user?['name'] ?? 'Beneficiary',
+                  style:
+                      tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  user?['email']?? '',
+                  user?['email'] ?? '',
                   style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                 ),
                 const SizedBox(height: 8),
@@ -645,8 +770,6 @@ class BeneficiaryProfileTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 32),
-
-          // Menu Items
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -659,22 +782,18 @@ class BeneficiaryProfileTab extends StatelessWidget {
                   leading: const Icon(Icons.edit_outlined),
                   title: const Text('Edit Profile'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Coming soon')),
-                    );
-                  },
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Coming soon')),
+                  ),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.help_outline),
                   title: const Text('Help & Support'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Coming soon')),
-                    );
-                  },
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Coming soon')),
+                  ),
                 ),
                 const Divider(height: 1),
                 ListTile(

@@ -2,6 +2,7 @@ import 'package:disasteraid_pk/features/admin/admin_audit_screen.dart';
 import 'package:disasteraid_pk/features/admin/admin_request_screen.dart';
 import 'package:disasteraid_pk/features/admin/admin_reports_screen.dart';
 import 'package:disasteraid_pk/features/admin/admin_donations_screen.dart';
+import 'package:disasteraid_pk/features/admin/admin_in_kind_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -27,8 +28,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _NavItem(Icons.business_outlined, Icons.business, 'NGOs'),
     _NavItem(Icons.campaign_outlined, Icons.campaign, 'Campaigns'),
     _NavItem(Icons.payments_outlined, Icons.payments, 'Donations'),
-    _NavItem(Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Withdrawals'),
+    _NavItem(Icons.account_balance_wallet_outlined,
+        Icons.account_balance_wallet, 'Withdrawals'),
     _NavItem(Icons.inbox_outlined, Icons.inbox, 'Requests'),
+    // ── NEW ──
+    _NavItem(Icons.inventory_2_outlined, Icons.inventory_2, 'In-Kind'),
+    // ── Analytics ──
     _NavItem(Icons.report_outlined, Icons.report, 'Reports'),
     _NavItem(Icons.history_outlined, Icons.history, 'Audit Log'),
   ];
@@ -40,6 +45,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     AdminDonationsScreen(),
     AdminWithdrawalsScreen(),
     AdminRequestsScreen(),
+    AdminInKindScreen(), // ← NEW at index 6
     AdminReportsScreen(),
     AdminAuditScreen(),
   ];
@@ -65,7 +71,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         selectedIndex: _index,
         onDestinationSelected: (i) {
           setState(() => _index = i);
-          Navigator.pop(context); // Close drawer
+          Navigator.pop(context);
         },
         children: [
           Padding(
@@ -75,16 +81,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
               children: [
                 Icon(Icons.admin_panel_settings, size: 40, color: cs.primary),
                 const SizedBox(height: 12),
-                Text('Admin Panel', style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                Text('DisasterAid PK', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+                Text('Admin Panel',
+                    style:
+                        tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                Text('DisasterAid PK',
+                    style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
               ],
             ),
           ),
           const Divider(indent: 24, endIndent: 24),
           ...List.generate(_navItems.length, (i) {
             final item = _navItems[i];
-            // Add a divider before "Reports" section
-            if (i == 5) {
+
+            // Divider before analytics section
+            if (i == 7) {
               return Column(
                 children: [
                   const Padding(
@@ -107,7 +117,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           }),
         ],
       ),
-      // Bottom nav for the top 4 most-used tabs (fits 360px)
+      // Bottom nav — top 4 most-used tabs
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index < 4 ? _index : 0,
         onDestinationSelected: (i) => setState(() => _index = i),
@@ -135,6 +145,10 @@ class _NavItem {
   const _NavItem(this.icon, this.selectedIcon, this.label);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Stats Tab (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _AdminStatsTab extends StatefulWidget {
   const _AdminStatsTab();
 
@@ -147,7 +161,8 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
   bool _loading = true;
   String? _error;
   final _api = ApiClient();
-  final _currency = NumberFormat.currency(locale: 'en_PK', symbol: 'PKR ', decimalDigits: 0);
+  final _currency =
+      NumberFormat.currency(locale: 'en_PK', symbol: 'PKR ', decimalDigits: 0);
 
   @override
   void initState() {
@@ -156,16 +171,32 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
   }
 
   Future<void> _loadStats() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final res = await _api.dio.get('/admin/stats');
       if (mounted) {
-        setState(() { _stats = res.data; _loading = false; });
+        setState(() {
+          _stats = res.data;
+          _loading = false;
+        });
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() { _error = e.message; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = 'Failed to load stats'; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load stats';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -173,7 +204,6 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 200),
       child: _buildBody(cs, tt),
@@ -182,7 +212,9 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
 
   Widget _buildBody(ColorScheme cs, TextTheme tt) {
     if (_loading) return _buildShimmer(cs);
-    if (_error!= null) return ErrorState(message: _error!, onRetry: _loadStats);
+    if (_error != null) {
+      return ErrorState(message: _error!, onRetry: _loadStats);
+    }
     if (_stats == null) return const Center(child: Text('No data'));
 
     final users = _stats!['users'] ?? {};
@@ -195,7 +227,8 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Platform Overview', style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text('Platform Overview',
+              style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           GridView.count(
             crossAxisCount: 2,
@@ -232,7 +265,8 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
             ],
           ),
           const SizedBox(height: 24),
-          Text('Campaigns & Donations', style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          Text('Campaigns & Donations',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           GridView.count(
             crossAxisCount: 2,
@@ -250,13 +284,15 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
               ),
               _StatCard(
                 title: 'Total Raised',
-                value: _currency.format(_parseAmount(donations['total_amount'])),
+                value:
+                    _currency.format(_parseAmount(donations['total_amount'])),
                 icon: Icons.volunteer_activism_outlined,
                 color: Colors.purple,
               ),
               _StatCard(
                 title: 'Total Target',
-                value: _currency.format(_parseAmount(campaigns['total_target'])),
+                value:
+                    _currency.format(_parseAmount(campaigns['total_target'])),
                 icon: Icons.flag_outlined,
                 color: Colors.indigo,
               ),
@@ -267,6 +303,19 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
                 color: Colors.brown,
               ),
             ],
+          ),
+          const SizedBox(height: 24),
+
+          // ── In-Kind shortcut card ──────────────────────────
+          Text('In-Kind Donations',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          _InKindSummaryCard(
+            onTap: () {
+              final state =
+                  context.findAncestorStateOfType<_AdminDashboardState>();
+              state?.setState(() => state._index = 6);
+            },
           ),
         ],
       ),
@@ -280,19 +329,21 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
   }
 
   Widget _buildShimmer(ColorScheme cs) {
-    final baseColor = cs.surfaceContainerHighest;
-    final highlightColor = cs.surfaceContainerLow;
-
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Shimmer.fromColors(
-          baseColor: baseColor,
-          highlightColor: highlightColor,
+          baseColor: cs.surfaceContainerHighest,
+          highlightColor: cs.surfaceContainerLow,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(height: 24, width: 200, decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(4))),
+              Container(
+                  height: 24,
+                  width: 200,
+                  decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(4))),
               const SizedBox(height: 16),
               GridView.count(
                 crossAxisCount: 2,
@@ -301,12 +352,20 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.3,
-                children: List.generate(4, (_) => Container(
-                  decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(12)),
-                )),
+                children: List.generate(
+                    4,
+                    (_) => Container(
+                        decoration: BoxDecoration(
+                            color: cs.surface,
+                            borderRadius: BorderRadius.circular(12)))),
               ),
               const SizedBox(height: 24),
-              Container(height: 24, width: 250, decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(4))),
+              Container(
+                  height: 24,
+                  width: 250,
+                  decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(4))),
               const SizedBox(height: 16),
               GridView.count(
                 crossAxisCount: 2,
@@ -315,9 +374,12 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.3,
-                children: List.generate(4, (_) => Container(
-                  decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(12)),
-                )),
+                children: List.generate(
+                    4,
+                    (_) => Container(
+                        decoration: BoxDecoration(
+                            color: cs.surface,
+                            borderRadius: BorderRadius.circular(12)))),
               ),
             ],
           ),
@@ -326,6 +388,105 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
     );
   }
 }
+
+// ─── In-Kind summary card on stats tab ───────────────────────────────────────
+
+class _InKindSummaryCard extends StatefulWidget {
+  final VoidCallback onTap;
+  const _InKindSummaryCard({required this.onTap});
+
+  @override
+  State<_InKindSummaryCard> createState() => _InKindSummaryCardState();
+}
+
+class _InKindSummaryCardState extends State<_InKindSummaryCard> {
+  int _total = 0;
+  int _pending = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await ApiClient.instance.get('/in-kind/admin/all');
+      final List data = res.data is List ? res.data : res.data['data'] ?? [];
+      int pending = 0;
+      for (final d in data) {
+        if ((d['status'] ?? '') == 'available') pending++;
+      }
+      if (mounted) {
+        setState(() {
+          _total = data.length;
+          _pending = pending;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.teal.withOpacity(0.4)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: widget.onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.inventory_2_outlined,
+                    color: Colors.teal, size: 28),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _loading
+                    ? const Text('Loading...')
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('$_total total donations',
+                              style: tt.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 4),
+                          Text(
+                            '$_pending currently available',
+                            style: tt.bodySmall
+                                ?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+              ),
+              Icon(Icons.arrow_forward_ios,
+                  size: 16, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
 
 class _StatCard extends StatelessWidget {
   final String title;
@@ -348,9 +509,9 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,15 +521,20 @@ class _StatCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Icon(icon, color: color, size: 28),
-              Icon(Icons.arrow_outward, color: color.withOpacity(0.5), size: 16),
+              Icon(Icons.arrow_outward,
+                  color: color.withValues(alpha: 0.5), size: 16),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: tt.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: tt.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
           ),
           const SizedBox(height: 4),

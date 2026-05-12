@@ -205,9 +205,12 @@ class _VolunteerTasksScreenState extends State<VolunteerTasksScreen> with Single
           ],
         ),
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        child: _buildBody(),
+      body: SafeArea(
+        top: false,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: _buildBody(),
+        ),
       ),
     );
   }

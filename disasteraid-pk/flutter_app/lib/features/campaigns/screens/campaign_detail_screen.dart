@@ -9,7 +9,7 @@ import '../../../core/utils/app_formatters.dart';
 import '../services/campaign_service.dart';
 import '../models/campaign.dart';
 import '../../../shared/widgets/report_dialog.dart';
-
+import '../../../core/permsisions/permission.dart';
 class CampaignDetailScreen extends StatefulWidget {
   final int id;
   const CampaignDetailScreen({super.key, required this.id});
@@ -203,6 +203,7 @@ Future<void> _showManualDonateDialog() async {
                     ),
                   );
                   if (source != null) {
+                    await requestPermissions();
                     final result = await ImagePicker().pickImage(
                       source: source,
                       imageQuality: 75,
@@ -380,36 +381,47 @@ Future<void> _showManualDonateDialog() async {
   }
 
   Widget _buildError() {
-    return Scaffold(
-      appBar: AppBar(),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
-              const SizedBox(height: 16),
-              Text('Error', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(error!, textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+    return CustomScrollView(
+      slivers: [
+        const SliverAppBar(pinned: true),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64,
+                      color: Theme.of(context).colorScheme.error),
+                  const SizedBox(height: 16),
+                  Text('Error', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  Text(error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildNotFound() {
-    return Scaffold(
-      appBar: AppBar(),
-      body: const Center(child: Text('Campaign not found')),
+    return const CustomScrollView(
+      slivers: [
+        SliverAppBar(pinned: true),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: Text('Campaign not found')),
+        ),
+      ],
     );
   }
 
@@ -626,7 +638,7 @@ Future<void> _showManualDonateDialog() async {
                   c.description,
                   style: tt.bodyLarge?.copyWith(height: 1.6),
                 ),
-                const SizedBox(height: 100), // Space for FAB
+                SizedBox(height: 100 + MediaQuery.of(context).padding.bottom), // Space for FAB + home indicator
               ],
             ),
           ),

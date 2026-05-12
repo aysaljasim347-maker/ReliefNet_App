@@ -128,10 +128,12 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
         title: const Text('Create Campaign'),
         scrolledUnderElevation: 0,
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        top: false,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             // Image Picker
             GestureDetector(
@@ -340,6 +342,7 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
             ),
             const SizedBox(height: 16),
           ],
+          ),
         ),
       ),
     );

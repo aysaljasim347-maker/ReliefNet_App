@@ -218,9 +218,9 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,11 +339,11 @@ class _CampaignCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'PKR ${_formatAmount(campaign.raisedAmount)}',
+                    'PKR ${_formatAmount(campaign.raisedAmount as double)}',
                     style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    '${campaign.percentRaised}% of PKR ${_formatAmount(campaign.targetAmount)}',
+                    '${campaign.percentRaised}% of PKR ${_formatAmount(campaign.targetAmount as double)}',
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
