@@ -115,7 +115,7 @@ class _AppShellState extends State<AppShell> {
       SocketService().onNotification = (data) {
         final messenger = _scaffoldMessengerKey.currentState;
         messenger?.hideCurrentMaterialBanner();
-        messenger?.showMaterialBanner(
+        messenger.showMaterialBanner(
           MaterialBanner(
             leading: const Icon(Icons.notifications_active_outlined),
             content: Text(data['title']?.toString() ?? 'New notification'),

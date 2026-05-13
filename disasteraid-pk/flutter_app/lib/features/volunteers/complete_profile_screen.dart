@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -17,7 +16,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _location = TextEditingController();
   int? _selectedNgoId;
-  List<String> _skills = [];
+  final List<String> _skills = [];
   String _availability = 'FLEXIBLE';
   List<dynamic> _ngos = [];
   bool _loading = false;

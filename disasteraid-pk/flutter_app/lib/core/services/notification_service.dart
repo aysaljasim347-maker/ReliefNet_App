@@ -3,10 +3,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 
-/**
- * Flutter Notification Service
- * Handles FCM background messages, foreground alerts, and local notification display.
- */
+///
+///Flutter Notification Service
+///Handles FCM background messages, foreground alerts, and local notification display.
+///
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -72,10 +72,10 @@ class NotificationService {
   }
 }
 
-/**
- * GLOBAL BACKGROUND HANDLER
- * Must be a top-level function (not a class member)
- */
+///
+///GLOBAL BACKGROUND HANDLER
+///Must be a top-level function (not a class member)
+///
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // If you're going to use other Firebase services in the background, 

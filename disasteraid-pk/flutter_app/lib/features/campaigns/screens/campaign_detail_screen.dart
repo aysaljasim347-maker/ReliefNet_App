@@ -427,7 +427,6 @@ Future<void> _showManualDonateDialog() async {
 
   Widget _buildContent() {
     final c = campaign!;
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return CustomScrollView(
@@ -442,9 +441,11 @@ Future<void> _showManualDonateDialog() async {
               onPressed: () {
                 final text = '${c.title}\n${AppFormatters.pkrAmount(c.raisedAmount)} raised of ${AppFormatters.pkrAmount(c.targetAmount)}';
                 Clipboard.setData(ClipboardData(text: text));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Campaign details copied')),
-                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Campaign details copied')),
+                  );
+                }
               },
             ),
             IconButton(
@@ -466,13 +467,13 @@ Future<void> _showManualDonateDialog() async {
                     imageUrl: c.imageUrl!,
                     fit: BoxFit.cover,
                     errorWidget: (_, __, ___) => Container(
-                      color: cs.surfaceContainerHighest,
-                      child: Icon(Icons.campaign, size: 80, color: cs.onSurfaceVariant),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Icon(Icons.campaign, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   )
                 : Container(
-                    color: cs.surfaceContainerHighest,
-                    child: Icon(Icons.campaign, size: 80, color: cs.onSurfaceVariant),
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: Icon(Icons.campaign, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
           ),
         ),

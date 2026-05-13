@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/widgets/location_picker.dart';
