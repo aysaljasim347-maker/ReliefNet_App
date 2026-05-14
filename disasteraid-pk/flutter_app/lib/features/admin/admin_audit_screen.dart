@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -34,7 +35,10 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
         'limit': 50,
       });
       if (mounted) {
-        setState(() { _logs = res.data as List; _loading = false; }); // ApiClient unwraps
+        setState(() { 
+          _logs = SafeDataHandler.extractList(res.data); 
+          _loading = false; 
+        });
       }
     } on ApiException catch (e) {
       if (mounted) setState(() { _error = e.message; _loading = false; });
@@ -153,7 +157,7 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
                 Container(height: 4, color: actionColor),
                 ExpansionTile(
                   leading: CircleAvatar(
-                    backgroundColor: actionColor.withOpacity(0.15),
+                    backgroundColor: actionColor.withValues(alpha: 0.15),
                     child: Icon(actionIcon, color: actionColor, size: 22),
                   ),
                   title: Text(
@@ -236,7 +240,7 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: cs.surfaceVariant,
+                              color: cs.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
@@ -286,9 +290,9 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

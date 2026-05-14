@@ -142,21 +142,17 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
       _error = null;
     });
     try {
-      final requestsRes = await _api.dio.get('/aid-requests/my');
-      dynamic statsData;
-      try {
-        final statsRes = await _api.dio.get('/beneficiary/stats');
-        statsData = statsRes.data;
-      } catch (_) {
-        statsData = null;
-      }
+      final results = await Future.wait([
+        _api.dio.get('/aid-requests/my'),
+        _api.dio.get('/beneficiary/stats').catchError((_) => Response(requestOptions: RequestOptions(), data: {})),
+      ]);
 
       if (mounted) {
         setState(() {
-          final rows =
-              requestsRes.data is List ? requestsRes.data as List : const [];
-          _myRequests =
-              rows.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          final rows = results[0].data is List ? results[0].data as List : const [];
+          _myRequests = rows.map((e) => Map<String, dynamic>.from(e is Map ? e : {})).toList();
+          
+          final statsData = results[1].data;
           if (statsData is Map) {
             _stats = Map<String, dynamic>.from(statsData);
           }
@@ -269,7 +265,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
               Text(
                 'Welcome,',
                 style: tt.titleMedium
-                    ?.copyWith(color: cs.onSecondary.withOpacity(0.9)),
+                    ?.copyWith(color: cs.onSecondary.withValues(alpha: 0.9)),
               ),
               const SizedBox(height: 4),
               Text(
@@ -287,7 +283,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
                   Text(
                     'We are here to help you',
                     style: tt.bodyMedium
-                        ?.copyWith(color: cs.onSecondary.withOpacity(0.9)),
+                        ?.copyWith(color: cs.onSecondary.withValues(alpha: 0.9)),
                   ),
                 ],
               ),
@@ -307,9 +303,9 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.teal.withOpacity(0.1),
+              color: Colors.teal.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.teal.withOpacity(0.4)),
+              border: Border.all(color: Colors.teal.withValues(alpha: 0.4)),
             ),
             child: Row(
               children: [
@@ -549,7 +545,7 @@ class _RequestCard extends StatelessWidget {
           Container(height: 4, color: urgencyColor),
           ExpansionTile(
             leading: CircleAvatar(
-              backgroundColor: statusColor.withOpacity(0.15),
+              backgroundColor: statusColor.withValues(alpha: 0.15),
               child: Icon(Icons.inventory_2_outlined,
                   color: statusColor, size: 20),
             ),
@@ -621,10 +617,9 @@ class _RequestCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
+                          color: Colors.red.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border:
-                              Border.all(color: Colors.red.withOpacity(0.3)),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,

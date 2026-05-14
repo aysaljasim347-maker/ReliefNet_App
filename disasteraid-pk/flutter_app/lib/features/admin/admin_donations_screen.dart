@@ -4,6 +4,7 @@ import 'package:shimmer/shimmer.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/utils/app_formatters.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/error_state.dart';
 
@@ -37,10 +38,10 @@ class _AdminDonationsScreenState extends State<AdminDonationsScreen> {
     }
     try {
       final res = await _api.dio.get('/donations/pending');
-      final rows = res.data is List ? res.data as List : const [];
+      final rows = SafeDataHandler.extractList(res.data);
       if (!mounted) return;
       setState(() {
-        _pendingDonations = rows.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _pendingDonations = rows.map((e) => SafeDataHandler.extractMap(e)).toList();
         _loading = false;
       });
     } catch (e) {
@@ -98,7 +99,7 @@ class _AdminDonationsScreenState extends State<AdminDonationsScreen> {
         'status': approve ? 'VERIFIED' : 'REJECTED',
         'rejection_reason': reason,
       });
-      if (!mounted) return;
+      if (!mounted || !context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(approve ? 'Donation verified' : 'Donation rejected'),
@@ -107,11 +108,10 @@ class _AdminDonationsScreenState extends State<AdminDonationsScreen> {
       );
       _loadPending();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ApiClient.messageFromError(e, 'Failed to update donation'))),
-        );
-      }
+      if (!mounted || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiClient.messageFromError(e, 'Failed to update donation'))),
+      );
     }
   }
 

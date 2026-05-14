@@ -5,6 +5,7 @@ import 'package:disasteraid_pk/features/campaigns/models/campaign.dart';
 import 'package:disasteraid_pk/features/campaigns/screens/campaign_create_screen.dart';
 import 'package:disasteraid_pk/features/campaigns/screens/campaign_detail_screen.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -31,12 +32,13 @@ class _NgoCampaignsScreenState extends State<NgoCampaignsScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       final ngoRes = await _api.dio.get('/ngos/me');
-      final ngoId = (ngoRes.data as Map?)?['id']; // ApiClient unwraps
+      final ngoData = SafeDataHandler.extractMap(ngoRes.data);
+      final ngoId = ngoData['id']; // ApiClient unwraps
       final res = await _api.dio.get('/campaigns', queryParameters: {'ngo_id': ngoId});
       if (mounted) {
         setState(() {
-          final rows = res.data is List ? res.data as List : const [];
-          _campaigns = rows.map((e) => Campaign.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+          final rows = SafeDataHandler.extractList(res.data);
+          _campaigns = rows.map((e) => Campaign.fromJson(SafeDataHandler.extractMap(e))).toList();
           _loading = false;
         });
       }

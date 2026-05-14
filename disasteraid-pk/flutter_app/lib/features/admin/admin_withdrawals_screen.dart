@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -35,7 +36,10 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
       final params = _filter == 'ALL'? <String, dynamic>{} : {'status': _filter};
       final res = await _api.dio.get('/admin/withdrawals', queryParameters: params);
       if (mounted) {
-        setState(() { _withdrawals = res.data as List; _loading = false; }); // ApiClient unwraps
+        setState(() { 
+          _withdrawals = SafeDataHandler.extractList(res.data); 
+          _loading = false; 
+        }); // ApiClient unwraps
       }
     } on ApiException catch (e) {
       if (mounted) setState(() { _error = e.message; _loading = false; });
@@ -46,12 +50,13 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
 
   Future<void> _approveWithdrawal(int id) async {
     final notes = await _showApproveDialog();
-    if (notes == null) return;
+    if (notes == null || !mounted) return;
     await _submitStatus(id, 'APPROVED', adminNotes: notes);
   }
 
   Future<String?> _showApproveDialog() async {
     final ctrl = TextEditingController();
+    if (!mounted || !context.mounted) return null;
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -84,7 +89,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
   Future<void> _completeWithdrawal(int id, double amount) async {
     final picker = ImagePicker();
     final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-    if (img == null) return;
+    if (img == null || !mounted || !context.mounted) return;
 
     final notesCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(
@@ -113,24 +118,25 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
         ],
       ),
     );
-    if (confirmed!= true || notesCtrl.text.trim().isEmpty) {
-      if (mounted && notesCtrl.text.trim().isEmpty) {
+    if (confirmed != true || notesCtrl.text.trim().isEmpty) {
+      if (mounted && context.mounted && notesCtrl.text.trim().isEmpty) {
         _showError('Transaction reference required');
       }
       return;
     }
-
+    if (!mounted) return;
     await _submitStatus(id, 'COMPLETED', adminNotes: notesCtrl.text.trim(), proofFile: img);
   }
 
   Future<void> _rejectWithdrawal(int id) async {
     final reason = await _showRejectDialog();
-    if (reason == null) return;
+    if (reason == null || !mounted) return;
     await _submitStatus(id, 'REJECTED', rejectionReason: reason);
   }
 
   Future<String?> _showRejectDialog() async {
     final controller = TextEditingController();
+    if (!mounted || !context.mounted) return null;
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -183,7 +189,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
       }
 
       await _api.dio.patch('/admin/withdrawals/$id', data: formData);
-      if (mounted) {
+      if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Withdrawal ${status.toLowerCase()}'),
@@ -198,6 +204,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
   }
 
   void _showError(String msg) {
+    if (!mounted || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -316,7 +323,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
                 Container(height: 4, color: statusColor),
                 ExpansionTile(
                   leading: CircleAvatar(
-                    backgroundColor: statusColor.withOpacity(0.15),
+                    backgroundColor: statusColor.withValues(alpha: 0.15),
                     child: Icon(Icons.account_balance_wallet_outlined, color: statusColor, size: 22),
                   ),
                   title: Text(
@@ -336,7 +343,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.15),
+                      color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -371,9 +378,9 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.1),
+                                color: Colors.blue.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -404,9 +411,9 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1),
+                                color: Colors.red.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,

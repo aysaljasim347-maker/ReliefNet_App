@@ -4,6 +4,7 @@ import 'package:disasteraid_pk/features/ngo/ngo_dashboard_screen.dart';
 import 'package:disasteraid_pk/features/ngo/ngo_onboard_screen.dart';
 import 'package:disasteraid_pk/features/ngo/ngo_withdrawals_screen.dart';
 import 'package:disasteraid_pk/features/ngo/ngo_bank_details_screen.dart'; // ADDED
+import '../../core/utils/safe_data_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
@@ -17,29 +18,29 @@ class NgoDashboard extends StatefulWidget {
 
 class _NgoDashboardState extends State<NgoDashboard> {
   int _index = 0;
-  Map<String, dynamic>? _ngoProfile;
+  Map<String, dynamic> _ngoProfile = {};
   bool _loading = true;
+  final _api = ApiClient();
 
   @override
   void initState() {
     super.initState();
-    _checkNgoStatus();
+    _fetchProfile();
   }
 
-  Future<void> _checkNgoStatus() async {
+  Future<void> _fetchProfile() async {
     try {
-      final res = await ApiClient().dio.get('/ngos/me');
-      if (!mounted) return;
-      setState(() {
-        _ngoProfile = Map<String, dynamic>.from(res.data as Map? ?? {});
-        _loading = false;
-      });
+      final res = await _api.dio.get('/ngos/me');
+      if (mounted) {
+        setState(() {
+          _ngoProfile = SafeDataHandler.extractMap(res.data);
+          _loading = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }
   }
-
-  @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));

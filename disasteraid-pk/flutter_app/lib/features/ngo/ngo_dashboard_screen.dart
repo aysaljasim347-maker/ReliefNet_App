@@ -1,9 +1,11 @@
 import 'package:disasteraid_pk/features/ngo/ngo_onboard_screen.dart';
+import 'package:disasteraid_pk/shared/widgets/empty_state.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../shared/widgets/error_state.dart';
 
 class NGODashboardScreen extends StatefulWidget {
@@ -36,11 +38,11 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
     try {
       // 1. Check NGO profile + status FIRST
       final profileRes = await _api.dio.get('/ngos/me');
-      _ngoProfile = profileRes.data;
+      _ngoProfile = SafeDataHandler.extractMap(profileRes.data);
 
       // If no profile, go to onboarding
-      if (_ngoProfile == null) {
-        if (mounted) {
+      if (_ngoProfile!.isEmpty) {
+        if (mounted && context.mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const NgoOnboardScreen()),
@@ -62,17 +64,19 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
         _api.dio.get('/ngos/dashboard/recent'),
       ]);
 
-      final chartRaw = results[1].data as List;
+      final chartRaw = SafeDataHandler.extractList(results[1].data);
       final spots = <FlSpot>[];
       for (int i = 0; i < chartRaw.length; i++) {
-        spots.add(FlSpot(i.toDouble(), double.parse(chartRaw[i]['amount'].toString())));
+        final item = SafeDataHandler.extractMap(chartRaw[i]);
+        final amount = _parseAmount(item['amount']);
+        spots.add(FlSpot(i.toDouble(), amount));
       }
 
       if (mounted) {
         setState(() {
-          _stats = results[0].data;
+          _stats = SafeDataHandler.extractMap(results[0].data);
           _chartData = spots;
-          _recentDonations = results[2].data as List;
+          _recentDonations = SafeDataHandler.extractList(results[2].data);
           _loading = false;
         });
       }
@@ -119,7 +123,7 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
 
     // GATE: Check NGO status before showing dashboard
     if (_ngoProfile == null) {
-      return const SizedBox(); // Will redirect in _loadData
+      return const Center(child: CircularProgressIndicator()); // FIXED: Show loader instead of blank SizedBox
     }
 
     final status = _ngoProfile!['status'];
@@ -157,7 +161,7 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _ngoProfile!['org_name'] ?? '',
+                  _ngoProfile?['org_name'] ?? 'Your NGO',
                   style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -178,7 +182,7 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
   }
 
   Widget _buildRejectedScreen(ColorScheme cs, TextTheme tt) {
-    final reason = _ngoProfile!['rejection_reason'];
+    final reason = _ngoProfile?['rejection_reason'];
     return SafeArea(
       child: Center(
         child: Padding(
@@ -197,7 +201,7 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.08),
+                    color: Colors.red.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -336,17 +340,12 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
             ),
             const SizedBox(height: 16),
             if (_chartData.isEmpty)
-              SizedBox(
+              const SizedBox(
                 height: 200,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.show_chart, size: 48, color: cs.onSurfaceVariant),
-                      const SizedBox(height: 8),
-                      Text('No donations yet', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
-                    ],
-                  ),
+                child: EmptyState(
+                  icon: Icons.show_chart,
+                  title: 'No donations yet',
+                  compact: true,
                 ),
               )
             else
@@ -411,20 +410,13 @@ class _NGODashboardScreenState extends State<NGODashboardScreen> {
             ),
             const SizedBox(height: 12),
             if (_recentDonations.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.volunteer_activism_outlined, size: 48, color: cs.onSurfaceVariant),
-                      const SizedBox(height: 8),
-                      Text('No donations yet', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
-                    ],
-                  ),
-                ),
+              const EmptyState(
+                icon: Icons.volunteer_activism_outlined,
+                title: 'No donations yet',
+                compact: true,
               )
             else
-           ..._recentDonations.take(5).map((d) => ListTile(
+              ..._recentDonations.take(5).map((d) => ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundColor: cs.secondaryContainer,

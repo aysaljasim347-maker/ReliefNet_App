@@ -427,6 +427,7 @@ Future<void> _showManualDonateDialog() async {
 
   Widget _buildContent() {
     final c = campaign!;
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return CustomScrollView(
@@ -467,13 +468,13 @@ Future<void> _showManualDonateDialog() async {
                     imageUrl: c.imageUrl!,
                     fit: BoxFit.cover,
                     errorWidget: (_, __, ___) => Container(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: Icon(Icons.campaign, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      color: cs.surfaceContainerHighest,
+                      child: Icon(Icons.campaign, size: 80, color: cs.onSurfaceVariant),
                     ),
                   )
                 : Container(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: Icon(Icons.campaign, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    color: cs.surfaceContainerHighest,
+                    child: Icon(Icons.campaign, size: 80, color: cs.onSurfaceVariant),
                   ),
           ),
         ),
@@ -496,7 +497,7 @@ Future<void> _showManualDonateDialog() async {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: _statusColor(c.status).withOpacity(0.15),
+                        color: _statusColor(c.status).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: _statusColor(c.status)),
                       ),
@@ -713,7 +714,7 @@ class _DonateSheetState extends State<DonateSheet> {
         'is_anonymous': false,
       });
 
-      if (mounted) {
+      if (mounted && context.mounted) {
         final txnRef = res.data?['transaction_ref']?.toString();
         final refDisplay = txnRef != null && txnRef.length >= 8 ? txnRef.substring(0, 8) : (txnRef ?? 'OK');
         ScaffoldMessenger.of(context).showSnackBar(

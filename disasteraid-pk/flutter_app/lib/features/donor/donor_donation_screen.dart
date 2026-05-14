@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/api/api_client.dart';
 import '../../core/utils/app_formatters.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../campaigns/screens/campaign_detail_screen.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
@@ -35,11 +36,10 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
     try {
       final res = await _api.dio.get('/donations/my');
       // ApiClient already unwraps {success, data} -> returns data array
-      final raw = res.data is List ? res.data as List : const [];
-      final list = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final raw = SafeDataHandler.extractList(res.data);
       if (mounted) {
         setState(() {
-          _donations = list.map((e) => Donation.fromJson(e)).toList();
+          _donations = raw.map((e) => Donation.fromJson(SafeDataHandler.extractMap(e))).toList();
           _loading = false;
         });
       }
@@ -147,7 +147,7 @@ class _DonorDonationsScreenState extends State<DonorDonationsScreen> {
                 Text(
                   '${_donations.where((d) => d.status == 'VERIFIED').length} verified donations',
                   style: tt.bodySmall?.copyWith(
-                    color: cs.onPrimaryContainer.withOpacity(0.8),
+                    color: cs.onPrimaryContainer.withValues(alpha: 0.8),
                   ),
                 ),
               ],
@@ -310,7 +310,7 @@ class _DonationCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.15),
+                    color: statusColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: statusColor),
                   ),

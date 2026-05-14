@@ -43,7 +43,7 @@ class _NgoOnboardScreenState extends State<NgoOnboardScreen> {
       type: FileType.custom,
       allowedExtensions: ['jpg', 'png', 'pdf']
     );
-    if (result!= null) setState(() => _docs = result.files);
+    if (result != null && mounted) setState(() => _docs = result.files);
   }
 
   Future<void> _submit() async {
@@ -75,7 +75,7 @@ class _NgoOnboardScreenState extends State<NgoOnboardScreen> {
 
       await api.dio.post('/ngos/onboard', data: formData);
 
-      if (mounted) {
+      if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Submitted for approval'), backgroundColor: Colors.green)
         );
@@ -83,9 +83,9 @@ class _NgoOnboardScreenState extends State<NgoOnboardScreen> {
       }
     } on DioException catch (e) {
       final msg = e.response?.data['error']?? 'Submission failed';
-      setState(() => _error = msg);
+      if (mounted) setState(() => _error = msg);
     } catch (e) {
-      setState(() => _error = 'Submission failed: $e');
+      if (mounted) setState(() => _error = 'Submission failed: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

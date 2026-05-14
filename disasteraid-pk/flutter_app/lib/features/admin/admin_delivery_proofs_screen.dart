@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 
 class AdminDeliveryProofsScreen extends StatefulWidget {
   const AdminDeliveryProofsScreen({super.key});
@@ -22,12 +23,14 @@ class _AdminDeliveryProofsScreenState extends State<AdminDeliveryProofsScreen> {
   Future<void> _loadDeliveries() async {
     try {
       final res = await _api.dio.get('/admin/aids/delivered');
-      setState(() {
-        _deliveries = res.data['data'];
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _deliveries = SafeDataHandler.extractList(res.data);
+          _loading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 

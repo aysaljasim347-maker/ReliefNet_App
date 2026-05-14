@@ -112,8 +112,8 @@ class ApiClient {
         if (response?.data is Map) {
           final data = response!.data;
           message = _friendlyServerMessage(
-            response.statusCode,
-            data['error']?.toString() ?? data['message']?.toString(),
+            response?.statusCode,
+            (data['error'] ?? data['message'])?.toString(),
           );
           requestId = data['requestId']?.toString();
         }
@@ -153,11 +153,11 @@ class ApiClient {
       if (apiError is ApiException) return apiError.message;
       return _messageFor(error, fallback);
     }
-    final text = error.toString();
-    if (text.startsWith('DioException') || text.contains('SocketException')) {
-      return 'Check connection';
+    final text = error.toString().toLowerCase();
+    if (text.contains('socketexception') || text.contains('handshake') || text.contains('connection refused')) {
+      return 'Server unavailable. Check your connection.';
     }
-    return text.isEmpty ? fallback : text;
+    return text.length > 5 && !text.contains('dioexception') ? error.toString() : fallback;
   }
 
   static String _messageFor(DioException error,

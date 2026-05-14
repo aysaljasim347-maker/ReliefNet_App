@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -29,7 +30,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     try {
       final res = await _api.dio.get('/admin/reports', queryParameters: {'status': _filter});
       if (mounted) {
-        setState(() { _reports = res.data as List; _loading = false; }); // ApiClient unwraps
+        setState(() { 
+          _reports = SafeDataHandler.extractList(res.data); 
+          _loading = false; 
+        }); // ApiClient unwraps
       }
     } on ApiException catch (e) {
       if (mounted) setState(() { _error = e.message; _loading = false; });
@@ -40,19 +44,18 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
   Future<void> _resolve(int id, String status) async {
     final notes = await _showResolveDialog(status);
-    if (notes == null) return;
+    if (notes == null || !mounted) return;
 
     try {
       await _api.dio.patch('/admin/reports/$id', data: {'status': status, 'admin_notes': notes});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Report ${status.toLowerCase()}'),
-            backgroundColor: status == 'RESOLVED'? Colors.green : Colors.orange,
-          ),
-        );
-        _loadReports();
-      }
+      if (!mounted || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Report ${status.toLowerCase()}'),
+          backgroundColor: status == 'RESOLVED'? Colors.green : Colors.orange,
+        ),
+      );
+      _loadReports();
     } on ApiException catch (e) {
       if (mounted) _showError(e.message);
     }
@@ -63,6 +66,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     final action = status == 'RESOLVED'? 'Resolve' : 'Dismiss';
     final color = status == 'RESOLVED'? Colors.green : Colors.orange;
 
+    if (!mounted || !context.mounted) return null;
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -106,6 +110,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   }
 
   void _showError(String msg) {
+    if (!mounted || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -236,7 +241,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 Container(height: 4, color: reasonColor),
                 ExpansionTile(
                   leading: CircleAvatar(
-                    backgroundColor: reasonColor.withOpacity(0.15),
+                    backgroundColor: reasonColor.withValues(alpha: 0.15),
                     child: Icon(Icons.flag_outlined, color: reasonColor, size: 22),
                   ),
                   title: Row(
@@ -262,7 +267,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: reasonColor.withOpacity(0.15),
+                              color: reasonColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -290,7 +295,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.15),
+                      color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -324,7 +329,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: cs.surfaceVariant,
+                                color: cs.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
@@ -340,9 +345,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.1),
+                                color: Colors.blue.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,

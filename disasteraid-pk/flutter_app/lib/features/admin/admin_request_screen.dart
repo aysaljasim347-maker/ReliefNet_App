@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -35,8 +36,8 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
       ]);
       if (mounted) {
         setState(() {
-          _requests = results[0].data as List; // ApiClient unwraps
-          _ngos = results[1].data as List;
+          _requests = SafeDataHandler.extractList(results[0].data);
+          _ngos = SafeDataHandler.extractList(results[1].data);
           _loading = false;
         });
       }
@@ -245,7 +246,8 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
         itemCount: _requests.length,
         itemBuilder: (context, i) {
           final r = _requests[i];
-          final items = (r['items_needed'] as List?)?.join(', ')?? r['category']?? 'Aid';
+          final items = SafeDataHandler.extractList(r['items_needed']).join(', ');
+          final displayItems = items.isNotEmpty ? items : (r['category'] ?? 'Aid');
           final isGeneral = r['campaign_id'] == null;
           final urgencyColor = _urgencyColor(r['urgency']);
           final statusColor = _statusColor(r['status']);
@@ -264,7 +266,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                 Container(height: 4, color: urgencyColor),
                 ExpansionTile(
                   leading: CircleAvatar(
-                    backgroundColor: urgencyColor.withOpacity(0.15),
+                    backgroundColor: urgencyColor.withValues(alpha: 0.15),
                     child: Text(
                       r['urgency'][0],
                       style: TextStyle(
@@ -285,7 +287,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.purple.withOpacity(0.15),
+                            color: Colors.purple.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -321,7 +323,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.15),
+                      color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -394,7 +396,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: cs.surfaceVariant,
+                              color: cs.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -409,9 +411,9 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.1),
+                                color: Colors.blue.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                               ),
                               child: Row(
                                 children: [
@@ -452,7 +454,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.1),
+                                  color: Colors.orange.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
@@ -472,7 +474,7 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                           ..._ngos.map((ngo) => Card(
                                     margin: const EdgeInsets.only(bottom: 8),
                                     elevation: 0,
-                                    color: cs.surfaceVariant,
+                                    color: cs.surfaceContainerHighest,
                                     child: ListTile(
                                       dense: true,
                                       leading: CircleAvatar(
@@ -518,9 +520,9 @@ class _AdminRequestsScreenState extends State<AdminRequestsScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1),
+                                color: Colors.red.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,

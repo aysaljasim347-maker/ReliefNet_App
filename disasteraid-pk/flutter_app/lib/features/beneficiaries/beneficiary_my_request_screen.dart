@@ -213,7 +213,7 @@ class _RequestCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: request.isApproved
-              ? Colors.green.withOpacity(0.5)
+              ? Colors.green.withValues(alpha: 0.5)
               : cs.outlineVariant,
           width: request.isApproved ? 1.5 : 1,
         ),
@@ -227,7 +227,7 @@ class _RequestCard extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               child: Row(
                 children: [
                   const Icon(Icons.celebration, color: Colors.green, size: 18),
@@ -248,7 +248,7 @@ class _RequestCard extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.red.withOpacity(0.06),
+              color: Colors.red.withValues(alpha: 0.06),
               child: Row(
                 children: [
                   Icon(Icons.info_outline, color: Colors.red[400], size: 16),
@@ -281,13 +281,13 @@ class _RequestCard extends StatelessWidget {
                                 request.donationImageUrl!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Container(
-                                  color: cs.surfaceVariant,
+                                  color: cs.surfaceContainerHighest,
                                   child: Icon(Icons.inventory_2_outlined,
                                       color: cs.onSurfaceVariant),
                                 ),
                               )
                             : Container(
-                                color: cs.surfaceVariant,
+                                color: cs.surfaceContainerHighest,
                                 child: Icon(Icons.inventory_2_outlined,
                                     color: cs.onSurfaceVariant),
                               ),
@@ -331,10 +331,10 @@ class _RequestCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 3),
                             decoration: BoxDecoration(
-                              color: _statusColor.withOpacity(0.12),
+                              color: _statusColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                  color: _statusColor.withOpacity(0.4)),
+                                  color: _statusColor.withValues(alpha: 0.4)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -365,7 +365,7 @@ class _RequestCard extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: cs.surfaceVariant.withOpacity(0.5),
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -393,9 +393,9 @@ class _RequestCard extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.06),
+                      color: Colors.green.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

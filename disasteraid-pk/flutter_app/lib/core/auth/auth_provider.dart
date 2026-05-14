@@ -24,12 +24,20 @@ class AuthProvider extends ChangeNotifier {
     if (_token != null) {
       try {
         final res = await _api.dio.get('/auth/me');
-        _user = Map<String, dynamic>.from(res.data as Map);
-        _api.setCurrentUser(_user!);
-        _isAuthenticated = true;
+        final data = res.data;
+        if (data is Map) {
+          _user = Map<String, dynamic>.from(data);
+          _api.setCurrentUser(_user!);
+          _isAuthenticated = true;
+        } else {
+          throw Exception('Invalid user data');
+        }
       } on DioException {
         await _storage.delete(key: 'token');
         _api.clearCurrentUser();
+        _isAuthenticated = false;
+        _user = null;
+      } catch (e) {
         _isAuthenticated = false;
         _user = null;
       }
@@ -54,12 +62,14 @@ class AuthProvider extends ChangeNotifier {
       });
 
       final data = res.data; // Already unwrapped
-      _token = data['token']?.toString();
-      _user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
-      _isAuthenticated = true;
-      _api.setCurrentUser(_user!);
-      await _storage.write(key: 'token', value: _token);
-      notifyListeners();
+      if (data is Map) {
+        _token = data['token']?.toString();
+        _user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
+        _isAuthenticated = true;
+        _api.setCurrentUser(_user!);
+        await _storage.write(key: 'token', value: _token);
+        notifyListeners();
+      }
     } on DioException catch (e) {
       if (e.response?.statusCode == 409) {
         throw ApiClient.messageFromError(e, 'Email or phone already exists');
@@ -76,12 +86,14 @@ class AuthProvider extends ChangeNotifier {
       });
       
       final data = res.data; // Already unwrapped
-      _token = data['token']?.toString();
-      _user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
-      _isAuthenticated = true;
-      _api.setCurrentUser(_user!);
-      await _storage.write(key: 'token', value: _token);
-      notifyListeners();
+      if (data is Map) {
+        _token = data['token']?.toString();
+        _user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
+        _isAuthenticated = true;
+        _api.setCurrentUser(_user!);
+        await _storage.write(key: 'token', value: _token);
+        notifyListeners();
+      }
     } on DioException catch (e) {
       throw ApiClient.messageFromError(e, 'Invalid credentials');
     }

@@ -51,7 +51,7 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
       imageQuality: 80,
       maxWidth: 1920,
     );
-    if (picked!= null) setState(() => _imageFile = File(picked.path));
+    if (picked != null && mounted) setState(() => _imageFile = File(picked.path));
   }
 
   Future<void> _pickDate() async {
@@ -61,7 +61,7 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
       firstDate: DateTime.now().add(const Duration(days: 1)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (date!= null) setState(() => _endDate = date);
+    if (date != null && mounted) setState(() => _endDate = date);
   }
 
   Future<void> _submit() async {
@@ -87,7 +87,7 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
         'latitude': _campaignLocation!.latitude,
         'longitude': _campaignLocation!.longitude,
         'address': _campaignAddress.isEmpty? null : _campaignAddress,
-        if (_imageFile!= null)
+        if (_imageFile != null)
           'image': await MultipartFile.fromFile(
             _imageFile!.path,
             filename: _imageFile!.path.split('/').last,
@@ -96,7 +96,7 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
 
       await CampaignService().createCampaign(formData);
 
-      if (mounted) {
+      if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Campaign created successfully'),
@@ -107,14 +107,15 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
       }
     } on DioException catch (e) {
       final apiErr = e.error as ApiException?;
-      final msg = apiErr?.message?? 'Failed to create campaign';
-      _showError(msg);
+      final msg = apiErr?.message ?? 'Failed to create campaign';
+      if (mounted) _showError(msg);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   void _showError(String msg) {
+    if (!mounted || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -141,7 +142,7 @@ class _CampaignCreateScreenState extends State<CampaignCreateScreen> {
               child: Container(
                 height: 200,
                 decoration: BoxDecoration(
-                  color: cs.surfaceVariant,
+                  color: cs.surfaceContainerHighest
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: cs.outlineVariant),
                 ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/widgets/location_picker.dart';
@@ -7,7 +7,8 @@ import '../../../core/widgets/location_picker.dart';
 class RequestAidScreen extends StatefulWidget {
   final int? campaignId;
   final String campaignTitle;
-  const RequestAidScreen({super.key, this.campaignId, this.campaignTitle = 'General Request'});
+  const RequestAidScreen(
+      {super.key, this.campaignId, this.campaignTitle = 'General Request'});
 
   @override
   State<RequestAidScreen> createState() => _RequestAidScreenState();
@@ -30,10 +31,18 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
   final List<Map<String, dynamic>> _itemOptions = [
     {'key': 'food', 'label': 'Food/Rashan', 'icon': Icons.restaurant_outlined},
     {'key': 'water', 'label': 'Clean Water', 'icon': Icons.water_drop_outlined},
-    {'key': 'medicine', 'label': 'Medicine', 'icon': Icons.medical_services_outlined},
+    {
+      'key': 'medicine',
+      'label': 'Medicine',
+      'icon': Icons.medical_services_outlined
+    },
     {'key': 'shelter', 'label': 'Shelter/Tent', 'icon': Icons.home_outlined},
     {'key': 'clothing', 'label': 'Clothing', 'icon': Icons.checkroom_outlined},
-    {'key': 'hygiene', 'label': 'Hygiene Kit', 'icon': Icons.sanitizer_outlined},
+    {
+      'key': 'hygiene',
+      'label': 'Hygiene Kit',
+      'icon': Icons.sanitizer_outlined
+    },
   ];
 
   final Map<String, String> _categoryMap = {
@@ -55,7 +64,7 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
   void _updateCategory() {
     if (_selectedItems.isNotEmpty) {
       setState(() {
-        _category = _categoryMap[_selectedItems.first]?? 'OTHER';
+        _category = _categoryMap[_selectedItems.first] ?? 'OTHER';
       });
     }
   }
@@ -137,20 +146,26 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
             Card(
               elevation: 0,
               color: cs.secondaryContainer,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Icon(Icons.campaign, color: cs.onSecondaryContainer, size: 32),
+                    Icon(Icons.campaign,
+                        color: cs.onSecondaryContainer, size: 32),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.campaignId == null? 'General Request' : 'Campaign Request',
-                            style: tt.labelMedium?.copyWith(color: cs.onSecondaryContainer.withOpacity(0.8)),
+                            widget.campaignId == null
+                                ? 'General Request'
+                                : 'Campaign Request',
+                            style: tt.labelMedium?.copyWith(
+                                color: cs.onSecondaryContainer
+                                    .withValues(alpha: 0.8)),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -212,12 +227,13 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: cs.surfaceVariant,
+                color: cs.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.category_outlined, size: 16, color: cs.onSurfaceVariant),
+                  Icon(Icons.category_outlined,
+                      size: 16, color: cs.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Text(
                     'Category: $_category',
@@ -234,14 +250,17 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Describe your situation *',
-                hintText: 'Explain why you need aid and any special requirements...',
+                hintText:
+                    'Explain why you need aid and any special requirements...',
                 border: OutlineInputBorder(),
                 alignLabelWithHint: true,
                 prefixIcon: Icon(Icons.description_outlined),
               ),
               maxLines: 4,
               maxLength: 500,
-              validator: (v) => v!.trim().length < 10? 'Please describe in at least 10 characters' : null,
+              validator: (v) => v!.trim().length < 10
+                  ? 'Please describe in at least 10 characters'
+                  : null,
             ),
             const SizedBox(height: 16),
 
@@ -254,27 +273,28 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
                     decoration: InputDecoration(
                       labelText: 'Urgency *',
                       border: const OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.warning_amber, color: _urgencyColor(_urgency)),
+                      prefixIcon: Icon(Icons.warning_amber,
+                          color: _urgencyColor(_urgency)),
                     ),
                     items: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
-                     .map((u) => DropdownMenuItem(
-                            value: u,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: _urgencyColor(u),
-                                    shape: BoxShape.circle,
+                        .map((u) => DropdownMenuItem(
+                              value: u,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: _urgencyColor(u),
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(u),
-                              ],
-                            ),
-                          ))
-                     .toList(),
+                                  const SizedBox(width: 8),
+                                  Text(u),
+                                ],
+                              ),
+                            ))
+                        .toList(),
                     onChanged: (v) => setState(() => _urgency = v!),
                   ),
                 ),
@@ -326,17 +346,19 @@ class _RequestAidScreenState extends State<RequestAidScreen> {
             SizedBox(
               height: 56,
               child: FilledButton.icon(
-                onPressed: _loading? null : _submit,
+                onPressed: _loading ? null : _submit,
                 icon: _loading
-                 ? const SizedBox(
+                    ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.send),
-                label: Text(_loading? 'Submitting...' : 'Submit Request'),
+                label: Text(_loading ? 'Submitting...' : 'Submit Request'),
                 style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),

@@ -113,7 +113,7 @@ class _ManualDonateSheetState extends State<ManualDonateSheet> {
           const SizedBox(height: 24),
           Container(
             decoration: BoxDecoration(
-              color: cs.surfaceVariant.withOpacity(0.5),
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: cs.outlineVariant),
             ),

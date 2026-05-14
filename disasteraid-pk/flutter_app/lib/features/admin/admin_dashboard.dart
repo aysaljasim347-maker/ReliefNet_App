@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/error_state.dart';
 import 'admin_ngos_screen.dart';
 import 'admin_campaigns_screen.dart';
@@ -179,7 +180,7 @@ class _AdminStatsTabState extends State<_AdminStatsTab> {
       final res = await _api.dio.get('/admin/stats');
       if (mounted) {
         setState(() {
-          _stats = res.data;
+          _stats = SafeDataHandler.extractMap(res.data);
           _loading = false;
         });
       }
@@ -411,9 +412,13 @@ class _InKindSummaryCardState extends State<_InKindSummaryCard> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
     try {
       final res = await ApiClient.instance.get('/in-kind/admin/all');
-      final List data = res.data is List ? res.data : res.data['data'] ?? [];
+      final List data = SafeDataHandler.extractList(res.data);
       int pending = 0;
       for (final d in data) {
         if ((d['status'] ?? '') == 'available') pending++;
@@ -426,9 +431,16 @@ class _InKindSummaryCardState extends State<_InKindSummaryCard> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = true;
+        });
+      }
     }
   }
+
+  bool _error = false;
 
   @override
   Widget build(BuildContext context) {
@@ -439,11 +451,11 @@ class _InKindSummaryCardState extends State<_InKindSummaryCard> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.teal.withOpacity(0.4)),
+        side: BorderSide(color: Colors.teal.withValues(alpha: 0.4)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: widget.onTap,
+        onTap: _error ? _load : widget.onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -451,33 +463,40 @@ class _InKindSummaryCardState extends State<_InKindSummaryCard> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.teal.withOpacity(0.1),
+                  color: Colors.teal.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.inventory_2_outlined,
-                    color: Colors.teal, size: 28),
+                child: Icon(
+                  _error ? Icons.error_outline : Icons.inventory_2_outlined,
+                  color: _error ? cs.error : Colors.teal,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _loading
                     ? const Text('Loading...')
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('$_total total donations',
-                              style: tt.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$_pending currently available',
-                            style: tt.bodySmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
+                    : _error
+                        ? Text('Failed to load. Tap to retry.',
+                            style: tt.bodyMedium?.copyWith(color: cs.error))
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('$_total total donations',
+                                  style: tt.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$_pending currently available',
+                                style: tt.bodySmall
+                                    ?.copyWith(color: cs.onSurfaceVariant),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
               ),
-              Icon(Icons.arrow_forward_ios,
-                  size: 16, color: cs.onSurfaceVariant),
+              if (!_loading && !_error)
+                Icon(Icons.arrow_forward_ios,
+                    size: 16, color: cs.onSurfaceVariant),
             ],
           ),
         ),

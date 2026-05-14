@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
@@ -59,8 +60,8 @@ class InKindDonation {
         claimedByEmail: j['claimed_by_email'],
         imageUrl: j['image_url'],
         createdAt: DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
-        requests: (j['requests'] as List<dynamic>? ?? [])
-            .map((r) => InKindRequest.fromJson(r))
+        requests: SafeDataHandler.extractList(j['requests'])
+            .map((r) => InKindRequest.fromJson(SafeDataHandler.extractMap(r)))
             .toList(),
       );
 }
@@ -125,9 +126,9 @@ class _AdminInKindScreenState extends State<AdminInKindScreen> {
     });
     try {
       final res = await ApiClient.instance.get('/in-kind/admin/all');
-      final List data = res.data is List ? res.data : res.data['data'] ?? [];
       if (mounted) {
         setState(() {
+          final data = SafeDataHandler.extractList(res.data);
           _all = data.map((e) => InKindDonation.fromJson(e)).toList();
           _loading = false;
         });
@@ -235,7 +236,7 @@ class _AdminInKindScreenState extends State<AdminInKindScreen> {
                       onSelected: (_) => setState(() => _filter = s),
                       selectedColor: s == 'ALL'
                           ? cs.primaryContainer
-                          : _statusColor(s).withOpacity(0.25),
+                          : _statusColor(s).withValues(alpha: 0.25),
                       checkmarkColor: s == 'ALL' ? cs.primary : _statusColor(s),
                     ),
                   );
@@ -547,7 +548,7 @@ class _RequestTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: _color.withOpacity(0.15),
+          backgroundColor: _color.withValues(alpha: 0.15),
           child: Text(
             request.beneficiaryName.isNotEmpty
                 ? request.beneficiaryName[0].toUpperCase()
@@ -573,7 +574,7 @@ class _RequestTile extends StatelessWidget {
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: _color.withOpacity(0.15),
+            color: _color.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(

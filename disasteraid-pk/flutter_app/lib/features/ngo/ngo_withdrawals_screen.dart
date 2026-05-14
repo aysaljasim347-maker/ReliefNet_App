@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
 import '../../core/utils/app_formatters.dart';
 import 'models/withdrawal.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -38,8 +39,9 @@ class _NgoWithdrawalsScreenState extends State<NgoWithdrawalsScreen> {
       ]);
       if (mounted) {
         setState(() {
-          _wallet = results[0].data; // ApiClient unwraps
-          _withdrawals = (results[1].data as List)
+          _wallet = SafeDataHandler.extractMap(results[0].data); // ApiClient unwraps
+          final rawList = SafeDataHandler.extractList(results[1].data);
+          _withdrawals = rawList
           .map((e) => Withdrawal.fromJson(e))
           .toList();
           _loading = false;
@@ -555,7 +557,7 @@ class _WithdrawDialogState extends State<_WithdrawDialog> {
         'account_number': _accountController.text.trim(),
         'iban': _ibanController.text.trim().toUpperCase(),
       });
-      if (mounted) {
+      if (mounted && context.mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -565,7 +567,7 @@ class _WithdrawDialogState extends State<_WithdrawDialog> {
         );
       }
     } on ApiException catch (e) {
-      if (mounted) {
+      if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {

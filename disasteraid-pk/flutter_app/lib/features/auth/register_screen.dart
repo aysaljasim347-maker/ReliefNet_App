@@ -79,7 +79,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text,
         role: _role,
       );
-      if (mounted) {
+      if (mounted && context.mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       }
     } catch (e) {

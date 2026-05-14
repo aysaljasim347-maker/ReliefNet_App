@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -17,7 +18,8 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
   String _filter = 'ALL';
   String? _error;
   final _api = ApiClient();
-  final _currency = NumberFormat.currency(locale: 'en_PK', symbol: 'PKR ', decimalDigits: 0);
+  final _currency =
+      NumberFormat.currency(locale: 'en_PK', symbol: 'PKR ', decimalDigits: 0);
 
   @override
   void initState() {
@@ -26,17 +28,33 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
   }
 
   Future<void> _loadCampaigns() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final Map<String, dynamic> params = _filter == 'ALL'? {} : {'status': _filter};
-      final res = await _api.dio.get('/admin/campaigns', queryParameters: params);
+      final Map<String, dynamic> params =
+          _filter == 'ALL' ? {} : {'status': _filter};
+      final res =
+          await _api.dio.get('/admin/campaigns', queryParameters: params);
       if (mounted) {
-        setState(() { _campaigns = res.data as List; _loading = false; }); // ApiClient unwraps
+        setState(() {
+          _campaigns = SafeDataHandler.extractList(res.data);
+          _loading = false;
+        }); // ApiClient unwraps
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() { _error = e.message; _loading = false; });
+      if (mounted)
+        setState(() {
+          _error = e.message;
+          _loading = false;
+        });
     } catch (e) {
-      if (mounted) setState(() { _error = 'Failed to load campaigns'; _loading = false; });
+      if (mounted)
+        setState(() {
+          _error = 'Failed to load campaigns';
+          _loading = false;
+        });
     }
   }
 
@@ -45,7 +63,8 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
     if (!confirmed) return;
 
     try {
-      await _api.dio.patch('/admin/campaigns/$id/status', data: {'status': status});
+      await _api.dio
+          .patch('/admin/campaigns/$id/status', data: {'status': status});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -62,30 +81,38 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
 
   Future<bool> _confirmDialog(String status, String title) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${_getStatusAction(status)} Campaign?'),
-        content: Text('Are you sure you want to ${_getStatusAction(status).toLowerCase()} "$title"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: status == 'COMPLETED'
-          ? FilledButton.styleFrom(backgroundColor: Colors.red)
-              : null,
-            child: const Text('Confirm'),
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('${_getStatusAction(status)} Campaign?'),
+            content: Text(
+                'Are you sure you want to ${_getStatusAction(status).toLowerCase()} "$title"?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: status == 'COMPLETED'
+                    ? FilledButton.styleFrom(backgroundColor: Colors.red)
+                    : null,
+                child: const Text('Confirm'),
+              ),
+            ],
           ),
-        ],
-      ),
-    )?? false;
+        ) ??
+        false;
   }
 
   String _getStatusAction(String status) {
     switch (status) {
-      case 'PAUSED': return 'Pause';
-      case 'ACTIVE': return 'Resume';
-      case 'COMPLETED': return 'Complete';
-      default: return status;
+      case 'PAUSED':
+        return 'Pause';
+      case 'ACTIVE':
+        return 'Resume';
+      case 'COMPLETED':
+        return 'Complete';
+      default:
+        return status;
     }
   }
 
@@ -95,20 +122,29 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'ACTIVE': return Colors.green;
-      case 'PAUSED': return Colors.orange;
-      case 'COMPLETED': return Colors.blue;
-      default: return Colors.grey;
+      case 'ACTIVE':
+        return Colors.green;
+      case 'PAUSED':
+        return Colors.orange;
+      case 'COMPLETED':
+        return Colors.blue;
+      default:
+        return Colors.grey;
     }
   }
 
   Color _categoryColor(String category) {
     switch (category) {
-      case 'FOOD': return Colors.orange;
-      case 'MEDICAL': return Colors.red;
-      case 'SHELTER': return Colors.brown;
-      case 'EDUCATION': return Colors.blue;
-      default: return Colors.purple;
+      case 'FOOD':
+        return Colors.orange;
+      case 'MEDICAL':
+        return Colors.red;
+      case 'SHELTER':
+        return Colors.brown;
+      case 'EDUCATION':
+        return Colors.blue;
+      default:
+        return Colors.purple;
     }
   }
 
@@ -124,16 +160,19 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
-            children: ['ALL', 'ACTIVE', 'PAUSED', 'COMPLETED'].map((f) =>
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(f),
-                  selected: _filter == f,
-                  onSelected: (_) { setState(() => _filter = f); _loadCampaigns(); },
-                ),
-              )
-            ).toList(),
+            children: ['ALL', 'ACTIVE', 'PAUSED', 'COMPLETED']
+                .map((f) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(f),
+                        selected: _filter == f,
+                        onSelected: (_) {
+                          setState(() => _filter = f);
+                          _loadCampaigns();
+                        },
+                      ),
+                    ))
+                .toList(),
           ),
         ),
         Expanded(
@@ -148,7 +187,8 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
 
   Widget _buildBody(ColorScheme cs, TextTheme tt) {
     if (_loading) return _buildShimmer();
-    if (_error!= null) return ErrorState(message: _error!, onRetry: _loadCampaigns);
+    if (_error != null)
+      return ErrorState(message: _error!, onRetry: _loadCampaigns);
     if (_campaigns.isEmpty) return _buildEmptyState(cs, tt);
     return _buildCampaignList(cs, tt);
   }
@@ -177,8 +217,8 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
       icon: Icons.campaign_outlined,
       title: 'No $_filter campaigns',
       subtitle: _filter == 'ALL'
-    ? 'Campaigns will appear here once NGOs create them'
-        : 'No campaigns found with this status',
+          ? 'Campaigns will appear here once NGOs create them'
+          : 'No campaigns found with this status',
     );
   }
 
@@ -192,8 +232,8 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
           final c = _campaigns[i];
           final target = _parseAmount(c['target_amount']);
           final raised = _parseAmount(c['raised_amount']);
-          final progress = target > 0? raised / target : 0.0;
-          final status = c['status']?? 'ACTIVE';
+          final progress = target > 0 ? raised / target : 0.0;
+          final status = c['status'] ?? 'ACTIVE';
           final statusColor = _statusColor(status);
           final categoryColor = _categoryColor(c['category']);
 
@@ -213,22 +253,25 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: categoryColor.withOpacity(0.15),
+                      color: categoryColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.campaign_outlined, color: categoryColor, size: 24),
+                    child: Icon(Icons.campaign_outlined,
+                        color: categoryColor, size: 24),
                   ),
                   title: Text(
-                    c['title']?? 'Untitled',
-                    style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    c['title'] ?? 'Untitled',
+                    style:
+                        tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 4),
                       Text(
-                        c['org_name']?? 'Unknown NGO',
-                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        c['org_name'] ?? 'Unknown NGO',
+                        style:
+                            tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                       ),
                       const SizedBox(height: 8),
                       ClipRRect(
@@ -236,7 +279,7 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                         child: LinearProgressIndicator(
                           value: progress.clamp(0.0, 1.0),
                           minHeight: 6,
-                          backgroundColor: cs.surfaceVariant,
+                          backgroundColor: cs.surfaceContainerHighest,
                           valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                         ),
                       ),
@@ -246,7 +289,8 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                         children: [
                           Text(
                             '${_currency.format(raised)} / ${_currency.format(target)}',
-                            style: tt.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+                            style: tt.labelSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                           Text(
                             '${(progress * 100).toStringAsFixed(0)}%',
@@ -260,16 +304,17 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                     ],
                   ),
                   trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
+                      color: categoryColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      status,
+                      c['category'],
                       style: tt.labelSmall?.copyWith(
-                        color: statusColor,
-                        fontWeight: FontWeight.w600,
+                        color: categoryColor,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -283,56 +328,74 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                           const SizedBox(height: 16),
 
                           // Details Grid
-                          _detailRow(Icons.business_outlined, 'NGO', '${c['org_name']} (${c['ngo_email']?? 'N/A'})', cs, tt),
+                          _detailRow(
+                              Icons.business_outlined,
+                              'NGO',
+                              '${c['org_name']} (${c['ngo_email'] ?? 'N/A'})',
+                              cs,
+                              tt),
                           const SizedBox(height: 12),
-                          _detailRow(Icons.category_outlined, 'Category', c['category']?? 'N/A', cs, tt),
+                          _detailRow(Icons.category_outlined, 'Category',
+                              c['category'] ?? 'N/A', cs, tt),
                           const SizedBox(height: 12),
-                          _detailRow(Icons.location_on_outlined, 'Location', c['location']?? 'N/A', cs, tt),
+                          _detailRow(Icons.location_on_outlined, 'Location',
+                              c['location'] ?? 'N/A', cs, tt),
                           const SizedBox(height: 12),
-                          _detailRow(Icons.calendar_today_outlined, 'Created', _formatDate(c['created_at']), cs, tt),
+                          _detailRow(Icons.calendar_today_outlined, 'Created',
+                              _formatDate(c['created_at']), cs, tt),
                           const SizedBox(height: 16),
 
                           // Actions
                           Row(
                             children: [
-                              if (status == 'ACTIVE')...[
+                              if (status == 'ACTIVE') ...[
                                 Expanded(
                                   child: OutlinedButton.icon(
-                                    onPressed: () => _updateStatus(c['id'], 'PAUSED', c['title']),
+                                    onPressed: () => _updateStatus(
+                                        c['id'], 'PAUSED', c['title']),
                                     icon: const Icon(Icons.pause_outlined),
                                     label: const Text('Pause'),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: Colors.orange,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
                                       padding: const EdgeInsets.all(12),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
                               ],
-                              if (status == 'PAUSED')...[
+                              if (status == 'PAUSED') ...[
                                 Expanded(
                                   child: FilledButton.icon(
-                                    onPressed: () => _updateStatus(c['id'], 'ACTIVE', c['title']),
+                                    onPressed: () => _updateStatus(
+                                        c['id'], 'ACTIVE', c['title']),
                                     icon: const Icon(Icons.play_arrow_outlined),
                                     label: const Text('Resume'),
                                     style: FilledButton.styleFrom(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
                                       padding: const EdgeInsets.all(12),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
                               ],
-                              if (status!= 'COMPLETED')
+                              if (status != 'COMPLETED')
                                 Expanded(
                                   child: OutlinedButton.icon(
-                                    onPressed: () => _updateStatus(c['id'], 'COMPLETED', c['title']),
-                                    icon: const Icon(Icons.check_circle_outline),
+                                    onPressed: () => _updateStatus(
+                                        c['id'], 'COMPLETED', c['title']),
+                                    icon:
+                                        const Icon(Icons.check_circle_outline),
                                     label: const Text('Complete'),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: Colors.blue,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
                                       padding: const EdgeInsets.all(12),
                                     ),
                                   ),
@@ -352,7 +415,8 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
     );
   }
 
-  Widget _detailRow(IconData icon, String label, String value, ColorScheme cs, TextTheme tt) {
+  Widget _detailRow(
+      IconData icon, String label, String value, ColorScheme cs, TextTheme tt) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -381,7 +445,7 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
   double _parseAmount(dynamic val) {
     if (val == null) return 0;
     if (val is num) return val.toDouble();
-    return double.tryParse(val.toString())?? 0;
+    return double.tryParse(val.toString()) ?? 0;
   }
 
   String _formatDate(dynamic date) {

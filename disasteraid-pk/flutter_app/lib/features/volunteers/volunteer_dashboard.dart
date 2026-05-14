@@ -3,10 +3,13 @@ import 'package:disasteraid_pk/features/volunteers/complete_profile_screen.dart'
 import 'package:disasteraid_pk/features/volunteers/volunteer_tasks_screen.dart';
 import 'package:disasteraid_pk/features/volunteers/volunteer_map_screen.dart';
 import 'package:disasteraid_pk/features/chat/screens/chat_list_screen.dart';
+import 'package:disasteraid_pk/shared/widgets/error_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 
 class VolunteerDashboard extends StatefulWidget {
   const VolunteerDashboard({super.key});
@@ -82,6 +85,7 @@ class _VolunteerTasksTabState extends State<VolunteerTasksTab> {
   final _api = ApiClient();
   Map<String, dynamic> _stats = {};
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -90,16 +94,25 @@ class _VolunteerTasksTabState extends State<VolunteerTasksTab> {
   }
 
   Future<void> _loadStats() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final res = await _api.dio.get('/volunteer/stats');
       if (mounted) {
         setState(() {
-          _stats = res.data;
+          _stats = SafeDataHandler.extractMap(res.data);
           _loading = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Failed to load dashboard stats. Please try again.';
+        });
+      }
     }
   }
 
@@ -123,129 +136,182 @@ class _VolunteerTasksTabState extends State<VolunteerTasksTab> {
       ),
       body: RefreshIndicator(
         onRefresh: _loadStats,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Welcome Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [cs.tertiary, cs.tertiary.withValues(alpha: 0.85)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: _buildBody(cs, tt, user),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(ColorScheme cs, TextTheme tt, Map<String, dynamic>? user) {
+    if (_loading) return _buildShimmer(cs);
+    if (_error != null) {
+      return ErrorState(message: _error!, onRetry: _loadStats);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Welcome Card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [cs.tertiary, cs.tertiary.withValues(alpha: 0.85)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Welcome back,',
+                style: tt.titleMedium?.copyWith(color: cs.onTertiary.withValues(alpha: 0.9)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 4),
+              Text(
+                user?['name'] ?? 'Volunteer',
+                style: tt.headlineSmall?.copyWith(
+                  color: cs.onTertiary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
                 children: [
+                  Icon(Icons.volunteer_activism, color: cs.onTertiary, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    'Welcome back,',
-                    style: tt.titleMedium?.copyWith(color: cs.onTertiary.withOpacity(0.9)),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user?['name']?? 'Volunteer',
-                    style: tt.headlineSmall?.copyWith(
-                      color: cs.onTertiary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Icon(Icons.volunteer_activism, color: cs.onTertiary, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Delivering hope to those in need',
-                        style: tt.bodyMedium?.copyWith(color: cs.onTertiary.withOpacity(0.9)),
-                      ),
-                    ],
+                    'Delivering hope to those in need',
+                    style: tt.bodyMedium?.copyWith(color: cs.onTertiary.withValues(alpha: 0.9)),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
 
-            // Stats Row
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    label: 'Active',
-                    value: _loading? '...' : '${_stats['active_tasks']?? 0}',
-                    icon: Icons.assignment,
-                    color: Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    label: 'Completed',
-                    value: _loading? '...' : '${_stats['completed_tasks']?? 0}',
-                    icon: Icons.check_circle,
-                    color: Colors.green,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    label: 'Rating',
-                    value: _loading? '...' : '${_stats['rating']?? '5.0'}',
-                    icon: Icons.star,
-                    color: Colors.amber,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Quick Actions
-            Text(
-              'Quick Actions',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-
-            _ActionCard(
-              icon: Icons.assignment_outlined,
-              title: 'View Tasks',
-              subtitle: 'See all assigned deliveries',
-              color: Colors.blue,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const VolunteerTasksScreen()),
+        // Stats Row
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                label: 'Active',
+                value: '${_stats['active_tasks'] ?? 0}',
+                icon: Icons.assignment,
+                color: Colors.orange,
               ),
             ),
-            const SizedBox(height: 12),
-
-            _ActionCard(
-              icon: Icons.map_outlined,
-              title: 'Task Map',
-              subtitle: 'View deliveries on map',
-              color: Colors.purple,
-              onTap: () {
-                // Switch to map tab
-                final state = context.findAncestorStateOfType<_VolunteerDashboardState>();
-                state?.setState(() => state._currentIndex = 1);
-              },
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                label: 'Completed',
+                value: '${_stats['completed_tasks'] ?? 0}',
+                icon: Icons.check_circle,
+                color: Colors.green,
+              ),
             ),
-            const SizedBox(height: 12),
-
-            _ActionCard(
-              icon: Icons.qr_code_scanner,
-              title: 'Scan Delivery',
-              subtitle: 'Verify beneficiary QR code',
-              color: Colors.teal,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Coming soon')),
-                );
-              },
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                label: 'Rating',
+                value: '${_stats['rating'] ?? '5.0'}',
+                icon: Icons.star,
+                color: Colors.amber,
+              ),
             ),
           ],
         ),
+        const SizedBox(height: 24),
+
+        // Quick Actions
+        Text(
+          'Quick Actions',
+          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+
+        _ActionCard(
+          icon: Icons.assignment_outlined,
+          title: 'View Tasks',
+          subtitle: 'See all assigned deliveries',
+          color: Colors.blue,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const VolunteerTasksScreen()),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        _ActionCard(
+          icon: Icons.map_outlined,
+          title: 'Task Map',
+          subtitle: 'View deliveries on map',
+          color: Colors.purple,
+          onTap: () {
+            final state = context.findAncestorStateOfType<_VolunteerDashboardState>();
+            state?.setState(() => state._currentIndex = 1);
+          },
+        ),
+        const SizedBox(height: 12),
+
+        _ActionCard(
+          icon: Icons.qr_code_scanner,
+          title: 'Scan Delivery',
+          subtitle: 'Verify beneficiary QR code',
+          color: Colors.teal,
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Coming soon')),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShimmer(ColorScheme cs) {
+    return Shimmer.fromColors(
+      baseColor: cs.surfaceContainerHighest,
+      highlightColor: cs.surfaceContainerLow,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            height: 160,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: List.generate(
+              3,
+              (i) => Expanded(
+                child: Container(
+                  height: 100,
+                  margin: EdgeInsets.only(right: i < 2 ? 12 : 0),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+          Container(height: 24, width: 150, color: Colors.white),
+          const SizedBox(height: 16),
+          ...List.generate(
+            3,
+            (_) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                height: 80,
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

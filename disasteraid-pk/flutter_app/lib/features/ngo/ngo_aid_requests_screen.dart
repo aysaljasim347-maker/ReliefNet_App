@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/safe_data_handler.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/error_state.dart';
 
@@ -35,8 +36,8 @@ class _NgoAidRequestsScreenState extends State<NgoAidRequestsScreen> {
       ]);
       if (mounted) {
         setState(() {
-          _requests = results[0].data as List; // ApiClient unwraps
-          _volunteers = results[1].data as List;
+          _requests = SafeDataHandler.extractList(results[0].data); // ApiClient unwraps
+          _volunteers = SafeDataHandler.extractList(results[1].data);
           _loading = false;
         });
       }
@@ -53,15 +54,14 @@ class _NgoAidRequestsScreenState extends State<NgoAidRequestsScreen> {
         'status': 'ASSIGNED',
         'volunteer_id': volunteerId,
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Assigned to $volunteerName'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _loadData();
-      }
+      if (!mounted || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Assigned to $volunteerName'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadData();
     } on ApiException catch (e) {
       if (mounted) _showError(e.message);
     }
@@ -70,21 +70,21 @@ class _NgoAidRequestsScreenState extends State<NgoAidRequestsScreen> {
   Future<void> _updateStatus(int requestId, String newStatus) async {
     try {
       await _api.dio.patch('/ngos/aid-requests/$requestId', data: {'status': newStatus});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Status updated to $newStatus'),
-            backgroundColor: Colors.blue,
-          ),
-        );
-        _loadData();
-      }
+      if (!mounted || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Status updated to $newStatus'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+      _loadData();
     } on ApiException catch (e) {
       if (mounted) _showError(e.message);
     }
   }
 
   void _showError(String msg) {
+    if (!mounted || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -186,7 +186,8 @@ class _NgoAidRequestsScreenState extends State<NgoAidRequestsScreen> {
         itemCount: _requests.length,
         itemBuilder: (context, i) {
           final r = _requests[i];
-          final items = (r['items_needed'] as List?)?.join(', ')?? r['category']?? 'Aid';
+          final items = SafeDataHandler.extractList(r['items_needed']).join(', ');
+          final displayItems = items.isNotEmpty ? items : (r['category'] ?? 'Aid');
           final urgencyColor = _urgencyColor(r['urgency']);
           final statusColor = _statusColor(r['status']);
 

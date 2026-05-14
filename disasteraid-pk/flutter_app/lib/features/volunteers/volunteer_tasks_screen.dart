@@ -52,8 +52,8 @@ class _VolunteerTasksScreenState extends State<VolunteerTasksScreen> with Single
       if (mounted) {
         setState(() {
           // ApiClient already unwraps {success, data} -> returns array
-          _available = List<Map<String, dynamic>>.from(results[0].data);
-          _myTasks = List<Map<String, dynamic>>.from(results[1].data);
+          _available = results[0].data is List ? List.from(results[0].data) : [];
+          _myTasks = results[1].data is List ? List.from(results[1].data) : [];
           _loading = false;
         });
       }
@@ -71,6 +71,13 @@ class _VolunteerTasksScreenState extends State<VolunteerTasksScreen> with Single
       if (mounted) {
         setState(() {
           _error = apiErr?.message?? 'Failed to load tasks';
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'An unexpected error occurred';
           _loading = false;
         });
       }
@@ -257,7 +264,7 @@ class _VolunteerTasksScreenState extends State<VolunteerTasksScreen> with Single
         itemCount: _available.length,
         itemBuilder: (context, i) => _AvailableTaskCard(
           task: _available[i],
-          urgencyColor: _urgencyColor(_available[i]['urgency']),
+          urgencyColor: _urgencyColor(_available[i]['urgency']?.toString() ?? 'LOW'),
           onAccept: () => _acceptTask(_available[i]['id']),
         ),
       ),
@@ -282,8 +289,8 @@ class _VolunteerTasksScreenState extends State<VolunteerTasksScreen> with Single
         itemCount: _myTasks.length,
         itemBuilder: (context, i) => _MyTaskCard(
           task: _myTasks[i],
-          urgencyColor: _urgencyColor(_myTasks[i]['urgency']),
-          statusColor: _statusColor(_myTasks[i]['status']),
+          urgencyColor: _urgencyColor(_myTasks[i]['urgency']?.toString() ?? 'LOW'),
+          statusColor: _statusColor(_myTasks[i]['status']?.toString() ?? 'ASSIGNED'),
           onUpdateStatus: _updateStatus,
           onShowDelivery: _showDeliveryDialog,
         ),
@@ -338,7 +345,7 @@ class _AvailableTaskCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        task['urgency'],
+                        task['urgency']?.toString() ?? 'LOW',
                         style: tt.labelSmall?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -347,19 +354,19 @@ class _AvailableTaskCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Chip(
-                      label: Text(task['category']),
+                      label: Text(task['category']?.toString() ?? 'General'),
                       visualDensity: VisualDensity.compact,
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '${task['beneficiary_name']} - Family of ${task['family_size']}',
+                  '${task['beneficiary_name'] ?? 'Beneficiary'} - Family of ${task['family_size'] ?? 1}',
                   style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Campaign: ${task['campaign_title']}',
+                  'Campaign: ${task['campaign_title'] ?? 'N/A'}',
                   style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                 ),
                 const SizedBox(height: 8),
@@ -369,7 +376,7 @@ class _AvailableTaskCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        task['location']?? 'Unknown',
+                        task['location']?.toString()?? 'Unknown',
                         style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                       ),
                     ),
@@ -418,7 +425,7 @@ class _MyTaskCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final items = (task['items_needed'] as List?)?.join(', ')?? 'Aid';
-    final status = task['status'];
+    final status = task['status']?.toString() ?? 'ASSIGNED';
     final canChat = ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'].contains(status);
 
     return Card(
@@ -431,10 +438,10 @@ class _MyTaskCard extends StatelessWidget {
       child: ExpansionTile(
         leading: CircleAvatar(
           backgroundColor: urgencyColor,
-          child: Text(task['urgency'][0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          child: Text(status[0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
         title: Text(
-          '${task['category']} - ${task['beneficiary_name']}',
+          '${task['category'] ?? 'Aid'} - ${task['beneficiary_name'] ?? 'Beneficiary'}',
           style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         subtitle: Row(
@@ -455,17 +462,17 @@ class _MyTaskCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(),
-                _infoRow(context, Icons.campaign_outlined, 'Campaign', task['campaign_title']),
-                _infoRow(context, Icons.phone_outlined, 'Phone', task['phone']?? 'N/A'),
-                _infoRow(context, Icons.location_on_outlined, 'Address', task['location']),
-                _infoRow(context, Icons.people_outline, 'Family Size', '${task['family_size']}'),
+                _infoRow(context, Icons.campaign_outlined, 'Campaign', task['campaign_title']?.toString() ?? 'N/A'),
+                _infoRow(context, Icons.phone_outlined, 'Phone', task['phone']?.toString()?? 'N/A'),
+                _infoRow(context, Icons.location_on_outlined, 'Address', task['location']?.toString() ?? 'N/A'),
+                _infoRow(context, Icons.people_outline, 'Family Size', '${task['family_size'] ?? 1}'),
                 _infoRow(context, Icons.inventory_2_outlined, 'Items', items),
                 if (task['assigned_at']!= null)
                   _infoRow(
                     context,
                     Icons.schedule,
                     'Assigned',
-                    DateTime.parse(task['assigned_at']).toLocal().toString().substring(0, 16),
+                    _parseDate(task['assigned_at']),
                   ),
                 const SizedBox(height: 16),
                 _buildActionButton(context, task, status, canChat),
@@ -475,6 +482,15 @@ class _MyTaskCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _parseDate(dynamic value) {
+    try {
+      if (value == null) return 'N/A';
+      return DateTime.parse(value.toString()).toLocal().toString().substring(0, 16);
+    } catch (_) {
+      return 'N/A';
+    }
   }
 
   Widget _infoRow(BuildContext context, IconData icon, String label, String value) {

@@ -66,12 +66,16 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     try {
       final api = ApiClient();
       final res = await api.dio.get('/campaigns/map');
-      setState(() {
-        campaigns = List<Map<String, dynamic>>.from(res.data['data']);
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          // ApiClient already unwraps {success, data} -> returns List
+          final data = res.data;
+          campaigns = data is List ? List<Map<String, dynamic>>.from(data) : [];
+          loading = false;
+        });
+      }
     } catch (e) {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
       print('Map load error: $e');
     }
   }
@@ -87,12 +91,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         'lng': _currentLocation!.longitude,
         'radius': _radius,
       });
-      setState(() {
-        campaigns = List<Map<String, dynamic>>.from(res.data['data']);
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          final data = res.data;
+          campaigns = data is List ? List<Map<String, dynamic>>.from(data) : [];
+          loading = false;
+        });
+      }
     } catch (e) {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
       print('Nearby load error: $e');
     }
   }
